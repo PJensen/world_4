@@ -6,13 +6,35 @@ const styleByKind = {
   factory: { width: 62, height: 48 },
 };
 
-const backdropImage = new Image();
-backdropImage.src = new URL('../../assets/factory.svg', import.meta.url).href;
-const BACKDROP_SKY_CROP = 0.56;
+function drawSky(context, canvas, groundY, timeOfDay = 0.58) {
+  const daylight = Math.max(0, Math.sin(timeOfDay * Math.PI));
+  const horizonMix = 0.25 + daylight * 0.55;
+
+  const sky = context.createLinearGradient(0, 0, 0, groundY + 30);
+  sky.addColorStop(0, `rgba(${Math.round(22 + daylight * 25)}, ${Math.round(20 + daylight * 20)}, ${Math.round(65 + daylight * 70)}, 1)`);
+  sky.addColorStop(0.35, `rgba(${Math.round(70 + daylight * 55)}, ${Math.round(45 + daylight * 25)}, ${Math.round(96 + daylight * 40)}, 1)`);
+  sky.addColorStop(0.72, `rgba(${Math.round(150 + daylight * 70)}, ${Math.round(90 + daylight * 55)}, ${Math.round(80 + daylight * 20)}, 1)`);
+  sky.addColorStop(1, `rgba(${Math.round(190 + daylight * 55)}, ${Math.round(120 + daylight * 80)}, ${Math.round(90 + daylight * 30)}, 1)`);
+  context.fillStyle = sky;
+  context.fillRect(0, 0, canvas.width, groundY + 30);
+
+  const sunX = canvas.width * (0.12 + timeOfDay * 0.76);
+  const sunY = 66 + (1 - daylight) * 72;
+
+  context.fillStyle = `rgba(255, 205, 120, ${0.18 + daylight * 0.22})`;
+  context.beginPath();
+  context.arc(sunX, sunY, 52 * horizonMix, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = `rgba(255, 210, 122, ${0.55 + daylight * 0.35})`;
+  context.beginPath();
+  context.arc(sunX, sunY, 24 * horizonMix, 0, Math.PI * 2);
+  context.fill();
+}
 
 function drawWorld3Overlay(context, canvas, model) {
   const panelWidth = 260;
-  const panelHeight = 138;
+  const panelHeight = 190;
   const x = canvas.width - panelWidth - 12;
   const y = 12;
 
@@ -27,12 +49,15 @@ function drawWorld3Overlay(context, canvas, model) {
 
   const rows = [
     `Population: ${(model.population / 1e9).toFixed(2)} B`,
+    `Placed H/F/Fx: ${model.houses} / ${model.farms} / ${model.factories}`,
     `Resources: ${(model.resources * 100).toFixed(1)}%`,
     `Pollution: ${model.pollution.toFixed(2)}`,
     `Food / cap: ${model.foodPerCapita.toFixed(2)}`,
     `Industry idx: ${model.industrialOutput.toFixed(2)}`,
+    `Workers: ${(model.workersUsed / 1e6).toFixed(2)}M / ${(model.workersAvailable / 1e6).toFixed(2)}M`,
+    `Factory util: ${(model.factoryUtilization * 100).toFixed(0)}%`,
     `Birth/Death: ${(model.birthRate * 100).toFixed(2)}% / ${(model.deathRate * 100).toFixed(2)}%`,
-    `QoL: ${model.qualityOfLife.toFixed(2)}`,
+    `QoL: ${model.qualityOfLife.toFixed(2)}  •  TOD: ${Math.round(model.timeOfDay * 24)}:00`,
   ];
 
   context.fillStyle = '#cbd5e1';
@@ -154,6 +179,7 @@ export function createRenderSystem(canvas, context, hud, controls) {
     let tileSize = 64;
     let groundY = 420;
     let selectedKind = controls.getSelectedKind();
+    let model = null;
     for (const [id, camera, mode] of world.query(Camera, BuildMode)) {
       cameraX = camera.x;
       tileSize = mode.tileSize;
@@ -162,25 +188,10 @@ export function createRenderSystem(canvas, context, hud, controls) {
       break;
     }
 
-    if (backdropImage.complete && backdropImage.naturalWidth > 0) {
-      const parallaxX = -((cameraX * 0.2) % canvas.width);
-      const sourceWidth = backdropImage.naturalWidth;
-      const sourceHeight = backdropImage.naturalHeight * BACKDROP_SKY_CROP;
-      context.globalAlpha = 0.55;
-      context.drawImage(backdropImage, 0, 0, sourceWidth, sourceHeight, parallaxX - canvas.width, 0, canvas.width, groundY + 40);
-      context.drawImage(backdropImage, 0, 0, sourceWidth, sourceHeight, parallaxX, 0, canvas.width, groundY + 40);
-      context.drawImage(backdropImage, 0, 0, sourceWidth, sourceHeight, parallaxX + canvas.width, 0, canvas.width, groundY + 40);
-      context.globalAlpha = 1;
-    }
+    const modelTuple = world.query(World3State)[Symbol.iterator]().next().value;
+    model = modelTuple ? modelTuple[1] : null;
 
-    context.fillStyle = 'rgba(251, 191, 36, 0.22)';
-    context.beginPath();
-    context.arc(canvas.width * 0.82, 84, 48, 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = 'rgba(253, 224, 71, 0.8)';
-    context.beginPath();
-    context.arc(canvas.width * 0.82, 84, 24, 0, Math.PI * 2);
-    context.fill();
+    drawSky(context, canvas, groundY, model ? model.timeOfDay : 0.58);
 
     context.fillStyle = '#1e293b';
     context.fillRect(0, groundY, canvas.width, canvas.height - groundY);
@@ -214,17 +225,17 @@ export function createRenderSystem(canvas, context, hud, controls) {
     context.font = '13px system-ui, sans-serif';
     context.fillText('1:House  2:Farm  3:Factory  •  A/D or ←/→ to scroll  •  Click/Tap to place', 12, 22);
 
-    const modelTuple = world.query(World3State)[Symbol.iterator]().next().value;
-    if (modelTuple) drawWorld3Overlay(context, canvas, modelTuple[1]);
+    if (model) drawWorld3Overlay(context, canvas, model);
 
     if (hud) {
-      const model = modelTuple ? modelTuple[1] : null;
       hud.textContent = [
         `camera ${cameraX.toFixed(0)}m`,
         `selected ${selectedKind}`,
         `houses ${counts.house}`,
         `farms ${counts.farm}`,
         `factories ${counts.factory}`,
+        model ? `workers ${(model.workersUsed / 1e6).toFixed(2)}M/${(model.workersAvailable / 1e6).toFixed(2)}M` : null,
+        model ? `util ${(model.factoryUtilization * 100).toFixed(0)}%` : null,
         model ? `pop ${(model.population / 1e9).toFixed(2)}B` : null,
       ].filter(Boolean).join(' · ');
     }

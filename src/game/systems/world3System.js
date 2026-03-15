@@ -8,19 +8,40 @@ export function world3System(world, dt) {
     counts[building.kind] = (counts[building.kind] || 0) + 1;
   }
 
-  const factoryScale = Math.max(0.2, counts.factory * 0.08);
-  const farmScale = Math.max(0.2, counts.farm * 0.1);
-  const housingScale = Math.max(0.2, counts.house * 0.06);
+  const houses = counts.house;
+  const farms = counts.farm;
+  const factories = counts.factory;
+
+  const factoryScale = Math.max(0, factories * 0.085);
+  const farmScale = Math.max(0.15, farms * 0.11);
+  const housingScale = Math.max(0.15, houses * 0.065);
 
   const dtYears = dt * 0.65;
+  const PEOPLE_PER_HOUSE = 120000;
+  const LABOR_SHARE = 0.42;
+  const WORKERS_PER_FACTORY = 52000;
 
   for (const [id, model] of world.query(World3State)) {
     const resources = clamp(model.resources, 0, 1);
     const pollution = Math.max(0, model.pollution);
 
-    const industrialOutput = Math.max(0.02, factoryScale * (0.35 + resources * 0.75) * clamp(1 - pollution * 0.35, 0.2, 1));
+    const population = Math.max(0.1e9, houses * PEOPLE_PER_HOUSE);
+    const workersAvailable = population * LABOR_SHARE;
+    const workersNeeded = factories * WORKERS_PER_FACTORY;
+    const factoryUtilization = workersNeeded > 0
+      ? clamp(workersAvailable / workersNeeded, 0, 1)
+      : 0;
+    const workersUsed = Math.min(workersAvailable, workersNeeded);
+
+    const industrialOutput = Math.max(
+      0,
+      factoryScale
+      * factoryUtilization
+      * (0.35 + resources * 0.75)
+      * clamp(1 - pollution * 0.35, 0.2, 1),
+    );
     const foodOutput = Math.max(0.02, farmScale * clamp(1.18 - pollution * 0.38, 0.35, 1.25));
-    const populationNorm = Math.max(0.2, model.population / 4e9);
+    const populationNorm = Math.max(0.2, population / 4e9);
     const foodPerCapita = foodOutput / populationNorm;
 
     const birthRate = 0.024
@@ -33,16 +54,13 @@ export function world3System(world, dt) {
       + 0.013 * clamp(pollution, 0, 2)
       + 0.005 * clamp(0.45 - housingScale, 0, 0.45);
 
-    const births = model.population * birthRate * dtYears;
-    const deaths = model.population * deathRate * dtYears;
-
     const resourceUse = (industrialOutput * 0.015 + populationNorm * 0.0022) * dtYears;
     const pollutionInflow = (industrialOutput * 0.017 + populationNorm * 0.0032) * dtYears;
     const pollutionDecay = pollution * 0.015 * dtYears;
 
-    const nextPopulation = Math.max(0.8e9, model.population + births - deaths);
     const nextResources = clamp(resources - resourceUse, 0, 1);
     const nextPollution = Math.max(0, pollution + pollutionInflow - pollutionDecay);
+    const nextTimeOfDay = (model.timeOfDay + dt * 0.01) % 1;
 
     const qualityOfLife = clamp(
       foodPerCapita * 0.4
@@ -53,7 +71,7 @@ export function world3System(world, dt) {
     );
 
     world.set(id, World3State, {
-      population: nextPopulation,
+      population,
       resources: nextResources,
       pollution: nextPollution,
       foodPerCapita,
@@ -61,6 +79,13 @@ export function world3System(world, dt) {
       birthRate,
       deathRate,
       qualityOfLife,
+      houses,
+      farms,
+      factories,
+      workersAvailable,
+      workersUsed,
+      factoryUtilization,
+      timeOfDay: nextTimeOfDay,
     });
   }
 }

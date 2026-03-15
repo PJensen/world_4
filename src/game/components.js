@@ -26,4 +26,11 @@ export const World3State = defineComponent('World3State', {
 	birthRate: 0.026,
 	deathRate: 0.011,
 	qualityOfLife: 0.72,
+	houses: 0,
+	farms: 0,
+	factories: 0,
+	workersAvailable: 0,
+	workersUsed: 0,
+	factoryUtilization: 0,
+	timeOfDay: 0.58,
 });

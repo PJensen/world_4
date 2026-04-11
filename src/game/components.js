@@ -104,6 +104,7 @@ export const World3State = defineComponent('World3State', {
 	freightTraffic: 0,
 	serviceTraffic: 0,
 	trafficLoad: 0,
+	currentTrips: [],
 	money: 10000,
 	taxRevenueAnnual: 0,
 	serviceCostsAnnual: 0,

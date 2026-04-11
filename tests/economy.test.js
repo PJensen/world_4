@@ -143,6 +143,9 @@ Deno.test('world3System tracks roads, traffic, and history while collecting taxe
   assert(model.factories === 1 && model.farms === 1 && model.houses === 1 && model.commercials === 1 && model.roads === 7, 'expected building counts to be tracked');
   assert(model.connectedHouses === 1 && model.connectedFarms === 1 && model.connectedFactories === 1 && model.connectedCommercials === 1, 'expected all starter lots to have road access');
   assert(model.commuterTraffic > 0 && model.freightTraffic > 0 && model.serviceTraffic > 0, 'expected all traffic classes to register');
+  assert(model.currentTrips.some((trip) => trip.category === 'commute' && trip.originKind === 'house' && trip.destKind === 'factory'), 'expected house-to-job commute trips');
+  assert(model.currentTrips.some((trip) => trip.category === 'freight' && trip.originKind === 'farm' && trip.destKind === 'house'), 'expected farm-to-house food trips');
+  assert(model.currentTrips.some((trip) => trip.category === 'service' && trip.originKind === 'commercial'), 'expected commercial-origin service trips');
   assert(model.foodDelivered > 0 && model.goodsDelivered > 0 && model.servicesDelivered > 0, 'expected legitimate delivered flows between connected buildings');
   assert(model.goodsDelivered <= model.goodsDemand, 'expected goods delivery bounded by demand');
   assert(model.servicesDelivered <= model.servicesDemand, 'expected services delivery bounded by demand');
@@ -203,6 +206,8 @@ Deno.test('commercial civic and logistics buildings change services quality and 
   assert(advancedModel.qualityOfLife > baseModel.qualityOfLife, 'expected civic buildings to improve quality of life');
   assert(advancedModel.logisticsEffect > 1, 'expected logistics building to increase throughput');
   assert(advancedModel.trafficLoad < baseModel.trafficLoad, 'expected logistics building to reduce traffic load pressure');
+  assert(advancedModel.currentTrips.some((trip) => trip.originKind === 'civic' && trip.category === 'service'), 'expected civic-origin service trips');
+  assert(advancedModel.currentTrips.some((trip) => trip.originKind === 'factory' && trip.destKind === 'commercial'), 'expected factory-to-commercial goods trips');
 });
 
 Deno.test('world3System keeps full graph history instead of trimming old samples', () => {

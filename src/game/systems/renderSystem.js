@@ -12,6 +12,14 @@ const styleByKind = {
 
 const BUILD_TOOL_ORDER = Object.freeze(Object.keys(BUILDING_DEFS));
 const TOOL_ORDER = [...BUILD_TOOL_ORDER, 'bulldoze'];
+const TRIP_COLOR_BY_ORIGIN = Object.freeze({
+  house: '#f8fafc',
+  farm: '#84cc16',
+  factory: '#f59e0b',
+  commercial: '#60a5fa',
+  civic: '#cbd5e1',
+  logistics: '#22c55e',
+});
 
 function formatMoney(amount) {
   return `$${Math.round(amount).toLocaleString()}`;
@@ -633,27 +641,36 @@ function drawBulldozeGhost(context, x, groundY, tileSize, occupied) {
   context.restore();
 }
 
-function drawTraffic(context, roads, cameraX, groundY, model) {
-  if (!roads.length) return;
+function drawTraffic(context, cameraX, groundY, model) {
+  const trips = Array.isArray(model.currentTrips) ? model.currentTrips : [];
+  if (!trips.length) return;
 
-  const layers = [
-    { trips: model.commuterTraffic, color: '#7dd3fc', speed: 0.9, yOffset: 22, divisor: 18, radius: 3 },
-    { trips: model.freightTraffic, color: '#fb923c', speed: 0.55, yOffset: 28, divisor: 14, radius: 4 },
-    { trips: model.serviceTraffic, color: '#fde047', speed: 0.72, yOffset: 34, divisor: 20, radius: 2.5 },
-  ];
+  const laneByCategory = {
+    commute: { yOffset: 22, speed: 0.85, divisor: 42, radius: 2.8 },
+    freight: { yOffset: 28, speed: 0.5, divisor: 56, radius: 3.8 },
+    service: { yOffset: 34, speed: 0.7, divisor: 48, radius: 2.4 },
+  };
 
-  layers.forEach((layer) => {
-    const vehicleCount = Math.min(18, Math.max(0, Math.round(layer.trips / layer.divisor)));
-    for (let index = 0; index < vehicleCount; index += 1) {
-      const seed = model.simTime * layer.speed + index * 0.618;
-      const roadIndex = Math.floor(seed * 1.7) % roads.length;
-      const phase = seed - Math.floor(seed);
-      const roadX = roads[(roadIndex + roads.length) % roads.length];
-      const x = roadX - cameraX + 8 + phase * 48;
-      const y = groundY + layer.yOffset;
-      context.fillStyle = layer.color;
+  trips.forEach((trip, tripIndex) => {
+    const lane = laneByCategory[trip.category];
+    if (!lane) return;
+
+    const pathStart = Math.min(trip.fromX, trip.toX) - cameraX;
+    const pathEnd = Math.max(trip.fromX, trip.toX) - cameraX;
+    if (pathEnd < -20 || pathStart > context.canvas.width + 20) return;
+
+    const vehicleCount = Math.min(4, Math.max(1, Math.round(trip.amount / lane.divisor)));
+    for (let vehicleIndex = 0; vehicleIndex < vehicleCount; vehicleIndex += 1) {
+      const phase = (model.simTime * lane.speed + tripIndex * 0.173 + vehicleIndex * 0.31) % 1;
+      const routeDelta = trip.toX - trip.fromX;
+      const worldX = routeDelta === 0
+        ? trip.fromX + Math.sin((model.simTime + vehicleIndex) * 3) * 6
+        : trip.fromX + routeDelta * phase;
+      const screenX = worldX - cameraX;
+      const screenY = groundY + lane.yOffset;
+      context.fillStyle = TRIP_COLOR_BY_ORIGIN[trip.originKind] || '#e2e8f0';
       context.beginPath();
-      context.arc(x, y, layer.radius, 0, Math.PI * 2);
+      context.arc(screenX, screenY, lane.radius, 0, Math.PI * 2);
       context.fill();
     }
   });
@@ -716,10 +733,8 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
     const activeSmokeKeys = new Set();
     const occupied = new Map();
     const visibleLots = collectVisibleLots(world, cameraX, canvas.width);
-    const visibleRoads = [];
     for (const lot of visibleLots) {
       if (lot.road) {
-        visibleRoads.push(lot.x);
         counts.road += 1;
         drawBuilding(context, 'road', lot.screenX, groundY, lot.x);
       }
@@ -729,7 +744,7 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
       occupied.set(lot.x, Boolean(lot.road || lot.structure));
     }
 
-    drawTraffic(context, visibleRoads, cameraX, groundY, model || { commuterTraffic: 0, freightTraffic: 0, serviceTraffic: 0, simTime: 0 });
+    drawTraffic(context, cameraX, groundY, model || { currentTrips: [], simTime: 0 });
 
     for (const lot of visibleLots) {
       if (!lot.structure) continue;

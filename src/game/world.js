@@ -7,16 +7,18 @@ import {
 } from './components.js';
 import { createCameraSystem } from './systems/cameraSystem.js';
 import { createPlacementSystem } from './systems/placementSystem.js';
+import { createSmokeFx } from './systems/particleFx.js';
 import { createRenderSystem } from './systems/renderSystem.js';
 import { world3System } from './systems/world3System.js';
 
 export function createGameWorld({ canvas, context, hud, controls }) {
   const world = new World({ seed: 42, store: 'map' });
+  const smokeFx = createSmokeFx();
 
   world.system(createCameraSystem(controls), 'input');
   world.system(createPlacementSystem(controls), 'build');
   world.system(world3System, 'simulate');
-  world.system(createRenderSystem(canvas, context, hud, controls), 'render');
+  world.system(createRenderSystem(canvas, context, hud, controls, smokeFx), 'render');
   world.setScheduler(composeScheduler('input', 'build', 'simulate', 'render'));
 
   const state = world.create();

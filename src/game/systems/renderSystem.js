@@ -6,6 +6,49 @@ const styleByKind = {
   factory: { width: 62, height: 48 },
 };
 
+function getFactoryVariant(style, worldX = 0) {
+  const variantSeed = Math.abs(Math.floor(worldX / 16));
+  return {
+    variantSeed,
+    stackCount: 1 + (variantSeed % 3),
+    toothCount: 2 + (variantSeed % 2),
+    bodyTint: variantSeed % 2 === 0 ? '#374151' : '#3f3f46',
+    roofTint: variantSeed % 2 === 0 ? '#4b5563' : '#52525b',
+    style,
+  };
+}
+
+function getFactoryStackOrigins(x, groundY, style, worldX = 0) {
+  const y = groundY - style.height;
+  const left = x + 1;
+  const variant = getFactoryVariant(style, worldX);
+  const origins = [];
+
+  for (let stack = 0; stack < variant.stackCount; stack += 1) {
+    const offsetX = left + style.width - 14 - stack * 11;
+    const stackHeight = 20 + stack * 3;
+    origins.push({
+      x: offsetX + 4,
+      y: y - stackHeight,
+    });
+  }
+
+  return origins;
+}
+
+function drawSmokeSource(context, x, y) {
+  context.save();
+  const plume = context.createRadialGradient(x, y - 2, 1, x, y - 2, 16);
+  plume.addColorStop(0, 'rgba(71, 85, 105, 0.38)');
+  plume.addColorStop(0.6, 'rgba(100, 116, 139, 0.18)');
+  plume.addColorStop(1, 'rgba(148, 163, 184, 0)');
+  context.fillStyle = plume;
+  context.beginPath();
+  context.arc(x, y - 2, 16, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
 function drawSky(context, canvas, groundY, timeOfDay = 0.58) {
   const daylight = Math.max(0, Math.sin(timeOfDay * Math.PI));
   const horizonMix = 0.25 + daylight * 0.55;
@@ -111,20 +154,16 @@ function drawFarm(context, x, groundY, style) {
 function drawFactory(context, x, groundY, style, worldX = 0) {
   const y = groundY - style.height;
   const left = x + 1;
-  const variantSeed = Math.abs(Math.floor(worldX / 16));
-  const stackCount = 1 + (variantSeed % 3);
-  const toothCount = 2 + (variantSeed % 2);
-  const bodyTint = variantSeed % 2 === 0 ? '#374151' : '#3f3f46';
-  const roofTint = variantSeed % 2 === 0 ? '#4b5563' : '#52525b';
+  const variant = getFactoryVariant(style, worldX);
 
-  context.fillStyle = bodyTint;
+  context.fillStyle = variant.bodyTint;
   context.fillRect(left, y + 8, style.width, style.height - 8);
 
-  context.fillStyle = roofTint;
+  context.fillStyle = variant.roofTint;
   context.beginPath();
-  const toothWidth = style.width / (toothCount + 1);
+  const toothWidth = style.width / (variant.toothCount + 1);
   context.moveTo(left, y + 8);
-  for (let index = 0; index < toothCount; index += 1) {
+  for (let index = 0; index < variant.toothCount; index += 1) {
     const toothLeft = left + index * toothWidth;
     const peakX = toothLeft + toothWidth * 0.6;
     context.lineTo(peakX, y - 3);
@@ -136,21 +175,13 @@ function drawFactory(context, x, groundY, style, worldX = 0) {
   context.closePath();
   context.fill();
 
-  for (let stack = 0; stack < stackCount; stack += 1) {
-    const offsetX = left + style.width - 14 - stack * 11;
-    const stackHeight = 20 + stack * 3;
+  for (const stack of getFactoryStackOrigins(x, groundY, style, worldX)) {
     context.fillStyle = '#52525b';
-    context.fillRect(offsetX, y - stackHeight + 8, 8, stackHeight);
-
-    context.fillStyle = 'rgba(148, 163, 184, 0.45)';
-    context.beginPath();
-    context.arc(offsetX + 4, y - stackHeight - 1, 5, 0, Math.PI * 2);
-    context.arc(offsetX + 8, y - stackHeight - 8, 4, 0, Math.PI * 2);
-    context.fill();
+    context.fillRect(stack.x - 4, stack.y + 8, 8, groundY - style.height - stack.y);
   }
 
   context.fillStyle = '#fcd34d';
-  const windows = 3 + (variantSeed % 2);
+  const windows = 3 + (variant.variantSeed % 2);
   for (let i = 0; i < windows; i += 1) {
     context.fillRect(left + 8 + i * 11, y + 18, 7, 6);
   }
@@ -169,8 +200,8 @@ function drawBuilding(context, kind, x, groundY, worldX = 0) {
   drawHouse(context, x, groundY, style);
 }
 
-export function createRenderSystem(canvas, context, hud, controls) {
-  return function renderSystem(world) {
+export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
+  return function renderSystem(world, dt = 1 / 60) {
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = '#0f172a';
     context.fillRect(0, 0, canvas.width, canvas.height);
@@ -207,12 +238,51 @@ export function createRenderSystem(canvas, context, hud, controls) {
     }
 
     const counts = { house: 0, farm: 0, factory: 0 };
+    const smokeOrigins = [];
+    const activeSmokeKeys = new Set();
     for (const [id, building] of world.query(Building)) {
       const sx = building.x - cameraX;
       if (sx < -120 || sx > canvas.width + 120) continue;
       drawBuilding(context, building.kind, sx, groundY, building.x);
       counts[building.kind] = (counts[building.kind] || 0) + 1;
+
+      if (building.kind === 'factory') {
+        const style = styleByKind.factory;
+        const stacks = getFactoryStackOrigins(sx, groundY, style, building.x);
+        for (let stackIndex = 0; stackIndex < stacks.length; stackIndex += 1) {
+          drawSmokeSource(context, stacks[stackIndex].x, stacks[stackIndex].y);
+          const key = `factory:${id}:stack:${stackIndex}`;
+          activeSmokeKeys.add(key);
+          smokeFx.ensureEmitter(key, {
+            rate: 20,
+            speed: 18,
+            speedJitter: 0.5,
+            spread: Math.PI / 5,
+            life: 3.4,
+            lifeJitter: 0.35,
+            size: 14,
+            sizeEnd: 38,
+            alpha0: 0.52,
+            alpha1: 0,
+            ax: 6,
+            ay: -8,
+            offsetY: -3,
+            blur: 10,
+            colorA: { r: 68, g: 72, b: 82 },
+            colorB: { r: 140, g: 149, b: 160 },
+          });
+          smokeOrigins.push({
+            key,
+            x: stacks[stackIndex].x,
+            y: stacks[stackIndex].y,
+          });
+        }
+      }
     }
+
+    smokeFx.syncEmitters(activeSmokeKeys);
+    smokeFx.step(dt, smokeOrigins);
+    smokeFx.render(context);
 
     const pointerX = controls.getPointerX();
     const snappedWorldX = Math.floor((cameraX + pointerX) / tileSize) * tileSize;
@@ -228,12 +298,14 @@ export function createRenderSystem(canvas, context, hud, controls) {
     if (model) drawWorld3Overlay(context, canvas, model);
 
     if (hud) {
+      const smokeStats = smokeFx.stats();
       hud.textContent = [
         `camera ${cameraX.toFixed(0)}m`,
         `selected ${selectedKind}`,
         `houses ${counts.house}`,
         `farms ${counts.farm}`,
         `factories ${counts.factory}`,
+        `smoke ${smokeStats.activeParticles}/${smokeStats.emitters}`,
         model ? `workers ${(model.workersUsed / 1e6).toFixed(2)}M/${(model.workersAvailable / 1e6).toFixed(2)}M` : null,
         model ? `util ${(model.factoryUtilization * 100).toFixed(0)}%` : null,
         model ? `pop ${(model.population / 1e9).toFixed(2)}B` : null,

@@ -30,17 +30,31 @@ Then open:
 - `1`: select house
 - `2`: select farm
 - `3`: select factory
-- Left click: place selected building on snapped grid
-- Mobile: drag to pan, tap top bar thirds to select (house/farm/factory), tap world to place
+- `4`: select road
+- `X` or `Delete`: bulldoze tool
+- `Tab` or `G`: toggle live/stats overlay tab
+- Left click: place selected tool on snapped grid
+- Mobile: drag to pan, tap top bar tools to select, tap the right-side tab button to switch overlays, tap world to place or bulldoze
 
 ## Economy loop
 
 - You start with `$10,000` in the treasury.
-- Every placement costs money: house `$1,500`, farm `$1,200`, factory `$4,000`.
+- Every placement costs money: house `$1,500`, farm `$1,200`, factory `$4,000`, road `$300`.
+- Roads can be placed under buildings, so a finished lot can contain both a road and a structure.
+- Bulldozing refunds part of the original lot cost.
 - Houses provide housing capacity and taxpayers.
 - Farms feed the city, which improves survival and growth.
 - Factories drive industrial output and the strongest tax intake, but add pollution.
+- Road-connected lots exchange labor, food, goods, and services through contiguous road networks.
 - Taxes and service costs are collected continuously, so the treasury rises or falls while the sim runs.
+
+## Traffic and stats
+
+- Three traffic classes are simulated: commuter, freight, and service.
+- Traffic is visualized directly on roads as moving vehicle pips.
+- The graph tab is the primary overlay and sits below the building selector instead of covering it.
+- The overlay has two tabs: a graph-first flow view and a smaller live city readout.
+- The graph tracks delivered food, goods, services, treasury, net revenue, pollution, and each traffic class.
 
 ## Live overlay
 
@@ -49,7 +63,7 @@ Then open:
 
 ## Next extension points
 
-- Add roads and traffic types (commuter, freight, service).
-- Add a stats tab with multi-series line graphs for treasury, population, food, pollution, and utilization.
+- Add zoning rules or adjacency bonuses so road placement becomes more than basic access.
+- Add intersections, one-way segments, and heavier freight congestion rules.
 - Add bulldoze mode and road placement.
 - Add save/load snapshots for city layouts.

@@ -28,10 +28,20 @@ export function createGameWorld({ canvas, context, hud, controls }) {
 
   const starterHouse = world.create();
   world.add(starterHouse, Building, { kind: 'house', x: 0 });
+  const starterHouseRoad = world.create();
+  world.add(starterHouseRoad, Building, { kind: 'road', x: 0 });
+  const starterRoadA = world.create();
+  world.add(starterRoadA, Building, { kind: 'road', x: 64 });
   const starterFarm = world.create();
   world.add(starterFarm, Building, { kind: 'farm', x: 128 });
+  const starterFarmRoad = world.create();
+  world.add(starterFarmRoad, Building, { kind: 'road', x: 128 });
+  const starterRoadB = world.create();
+  world.add(starterRoadB, Building, { kind: 'road', x: 192 });
   const starterFactory = world.create();
   world.add(starterFactory, Building, { kind: 'factory', x: 256 });
+  const starterFactoryRoad = world.create();
+  world.add(starterFactoryRoad, Building, { kind: 'road', x: 256 });
 
   return world;
 }

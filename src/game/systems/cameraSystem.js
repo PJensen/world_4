@@ -13,8 +13,9 @@ export function createCameraSystem(controls) {
 
     for (const [id, mode] of world.query(BuildMode)) {
       const selectedKind = controls.getSelectedKind();
-      if (mode.selectedKind !== selectedKind) {
-        world.set(id, BuildMode, { selectedKind });
+      const overlayMode = controls.getOverlayMode ? controls.getOverlayMode() : mode.overlayMode;
+      if (mode.selectedKind !== selectedKind || mode.overlayMode !== overlayMode) {
+        world.set(id, BuildMode, { selectedKind, overlayMode });
       }
     }
   };

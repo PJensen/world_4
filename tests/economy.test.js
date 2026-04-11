@@ -34,7 +34,81 @@ Deno.test('placement charges treasury and blocks unaffordable builds', () => {
   assert(model.lastActionText.includes('Need $4,000'), `expected affordability message, got ${model.lastActionText}`);
 });
 
-Deno.test('world3System collects taxes and preserves farm-driven food output', () => {
+Deno.test('roads can be placed under buildings and buildings can be placed on roads', () => {
+  const world = new World({ seed: 42, store: 'map' });
+  const stateId = world.create();
+  world.add(stateId, Camera);
+  world.add(stateId, BuildMode);
+  world.add(stateId, World3State, { money: 10000 });
+
+  let callCount = 0;
+  const controls = {
+    consumePlacementRequests() {
+      callCount += 1;
+      if (callCount === 1) return [{ screenX: 32, kind: 'house' }];
+      if (callCount === 2) return [{ screenX: 32, kind: 'road' }];
+      if (callCount === 3) return [{ screenX: 96, kind: 'road' }];
+      if (callCount === 4) return [{ screenX: 96, kind: 'factory' }];
+      return [];
+    },
+  };
+
+  const placement = createPlacementSystem(controls);
+  placement(world);
+  placement(world);
+  placement(world);
+  placement(world);
+
+  const buildings = [...world.query(Building)];
+  const byKind = buildings.reduce((acc, entry) => {
+    acc[entry[1].kind] = (acc[entry[1].kind] || 0) + 1;
+    return acc;
+  }, {});
+
+  assert(byKind.house === 1, `expected one house, got ${byKind.house || 0}`);
+  assert(byKind.factory === 1, `expected one factory, got ${byKind.factory || 0}`);
+  assert(byKind.road === 2, `expected two roads, got ${byKind.road || 0}`);
+
+  const model = world.get(stateId, World3State);
+  const expectedMoney = 10000
+    - BUILDING_DEFS.house.cost
+    - BUILDING_DEFS.road.cost
+    - BUILDING_DEFS.road.cost
+    - BUILDING_DEFS.factory.cost;
+  assert(model.money === expectedMoney, `expected treasury ${expectedMoney}, got ${model.money}`);
+});
+
+Deno.test('bulldoze removes lots and refunds part of the build cost', () => {
+  const world = new World({ seed: 42, store: 'map' });
+  const stateId = world.create();
+  world.add(stateId, Camera);
+  world.add(stateId, BuildMode);
+  world.add(stateId, World3State, { money: 5000 });
+
+  const roadId = world.create();
+  world.add(roadId, Building, { kind: 'road', x: 64 });
+
+  let issued = false;
+  const controls = {
+    consumePlacementRequests() {
+      if (issued) return [];
+      issued = true;
+      return [{ screenX: 96, kind: 'bulldoze' }];
+    },
+  };
+
+  createPlacementSystem(controls)(world);
+
+  const buildings = [...world.query(Building)];
+  assert(buildings.length === 0, `expected road to be removed, got ${buildings.length} buildings`);
+
+  const model = world.get(stateId, World3State);
+  const expectedMoney = 5000 + Math.round(BUILDING_DEFS.road.cost * BUILDING_DEFS.road.refundRate);
+  assert(model.money === expectedMoney, `expected treasury ${expectedMoney}, got ${model.money}`);
+  assert(model.lastActionText.includes('Road demolished'), `expected demolition message, got ${model.lastActionText}`);
+});
+
+Deno.test('world3System tracks roads, traffic, and history while collecting taxes', () => {
   const world = new World({ seed: 42, store: 'map' });
   const stateId = world.create();
   world.add(stateId, World3State, {
@@ -44,8 +118,13 @@ Deno.test('world3System collects taxes and preserves farm-driven food output', (
 
   const lots = [
     { kind: 'house', x: 0 },
-    { kind: 'farm', x: 64 },
-    { kind: 'factory', x: 128 },
+    { kind: 'road', x: 0 },
+    { kind: 'road', x: 64 },
+    { kind: 'farm', x: 128 },
+    { kind: 'road', x: 128 },
+    { kind: 'road', x: 192 },
+    { kind: 'factory', x: 256 },
+    { kind: 'road', x: 256 },
   ];
   lots.forEach(({ kind, x }) => {
     const id = world.create();
@@ -58,5 +137,43 @@ Deno.test('world3System collects taxes and preserves farm-driven food output', (
   assert(model.money > 10000, `expected taxes to increase treasury, got ${model.money}`);
   assert(model.taxRevenueAnnual > model.serviceCostsAnnual, 'expected positive tax base for starter town');
   assert(model.foodOutput > model.foodDemand, `expected farms to overproduce food, got ${model.foodOutput} vs ${model.foodDemand}`);
-  assert(model.factories === 1 && model.farms === 1 && model.houses === 1, 'expected building counts to be tracked');
+  assert(model.factories === 1 && model.farms === 1 && model.houses === 1 && model.roads === 5, 'expected building counts to be tracked');
+  assert(model.connectedHouses === 1 && model.connectedFarms === 1 && model.connectedFactories === 1, 'expected all starter lots to have road access');
+  assert(model.commuterTraffic > 0 && model.freightTraffic > 0 && model.serviceTraffic > 0, 'expected all traffic classes to register');
+  assert(model.foodDelivered > 0 && model.goodsDelivered > 0 && model.servicesDelivered > 0, 'expected legitimate delivered flows between connected buildings');
+  assert(model.goodsDelivered <= model.goodsDemand, 'expected goods delivery bounded by demand');
+  assert(model.servicesDelivered <= model.servicesDemand, 'expected services delivery bounded by demand');
+  assert(Array.isArray(model.history) && model.history.length === 1, 'expected simulation history sample');
+});
+
+Deno.test('world3System keeps full graph history instead of trimming old samples', () => {
+  const world = new World({ seed: 42, store: 'map' });
+  const stateId = world.create();
+  world.add(stateId, World3State, {
+    money: 10000,
+    population: 120,
+    historySampleTimer: 0,
+  });
+
+  [
+    { kind: 'house', x: 0 },
+    { kind: 'road', x: 0 },
+    { kind: 'road', x: 64 },
+    { kind: 'farm', x: 128 },
+    { kind: 'road', x: 128 },
+    { kind: 'road', x: 192 },
+    { kind: 'factory', x: 256 },
+    { kind: 'road', x: 256 },
+  ].forEach(({ kind, x }) => {
+    const id = world.create();
+    world.add(id, Building, { kind, x });
+  });
+
+  for (let index = 0; index < 220; index += 1) {
+    world3System(world, 0.2);
+  }
+
+  const model = world.get(stateId, World3State);
+  assert(Array.isArray(model.history), 'expected history array');
+  assert(model.history.length === 220, `expected full history of 220 samples, got ${model.history.length}`);
 });

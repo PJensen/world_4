@@ -1,5 +1,12 @@
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+const TOOL_KEYS = Object.freeze({
+  '1': 'house',
+  '2': 'farm',
+  '3': 'factory',
+  '4': 'road',
+});
+
 function eventToCanvasPosition(event, canvas) {
   const rect = canvas.getBoundingClientRect();
   const normalizedX = (event.clientX - rect.left) / rect.width;
@@ -15,6 +22,7 @@ export function createBuildControls(canvas, target = window) {
     moveLeft: false,
     moveRight: false,
     selectedKind: 'house',
+    overlayMode: 'stats',
     pointerX: canvas.width * 0.5,
     placementRequests: [],
     pointerId: null,
@@ -28,6 +36,11 @@ export function createBuildControls(canvas, target = window) {
 
   const onKeyDown = (event) => {
     const key = event.key.toLowerCase();
+    if (TOOL_KEYS[key]) {
+      state.selectedKind = TOOL_KEYS[key];
+      event.preventDefault();
+      return;
+    }
     if (key === 'a' || key === 'arrowleft') {
       state.moveLeft = true;
       event.preventDefault();
@@ -38,9 +51,15 @@ export function createBuildControls(canvas, target = window) {
       event.preventDefault();
       return;
     }
-    if (key === '1') state.selectedKind = 'house';
-    if (key === '2') state.selectedKind = 'farm';
-    if (key === '3') state.selectedKind = 'factory';
+    if (key === 'x' || key === 'backspace' || key === 'delete') {
+      state.selectedKind = 'bulldoze';
+      event.preventDefault();
+      return;
+    }
+    if (key === 'tab' || key === 'g') {
+      state.overlayMode = state.overlayMode === 'overview' ? 'stats' : 'overview';
+      event.preventDefault();
+    }
   };
 
   const onKeyUp = (event) => {
@@ -60,10 +79,17 @@ export function createBuildControls(canvas, target = window) {
     if (event.button != null && event.button !== 0) return;
     const pos = eventToCanvasPosition(event, canvas);
 
-    if (pos.y <= 54) {
-      if (pos.x < canvas.width / 3) state.selectedKind = 'house';
-      else if (pos.x < (canvas.width * 2) / 3) state.selectedKind = 'farm';
-      else state.selectedKind = 'factory';
+    if (pos.y <= 56) {
+      const toolKinds = ['house', 'farm', 'factory', 'road', 'bulldoze'];
+      const toggleWidth = 132;
+      const toolAreaWidth = canvas.width - toggleWidth;
+      if (pos.x < toolAreaWidth) {
+        const segmentWidth = toolAreaWidth / toolKinds.length;
+        const toolIndex = Math.max(0, Math.min(toolKinds.length - 1, Math.floor(pos.x / segmentWidth)));
+        state.selectedKind = toolKinds[toolIndex];
+      } else {
+        state.overlayMode = state.overlayMode === 'overview' ? 'stats' : 'overview';
+      }
       state.pointerX = pos.x;
       return;
     }
@@ -128,6 +154,7 @@ export function createBuildControls(canvas, target = window) {
     isMovingLeft: () => state.moveLeft,
     isMovingRight: () => state.moveRight,
     getSelectedKind: () => state.selectedKind,
+    getOverlayMode: () => state.overlayMode,
     getPointerX: () => state.pointerX,
     consumePanDelta: () => {
       const delta = state.panDelta;

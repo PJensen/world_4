@@ -4,14 +4,26 @@ export const BUILDING_DEFS = Object.freeze({
 	house: Object.freeze({
 		label: 'House',
 		cost: 1500,
+		upkeepAnnual: 95,
+		refundRate: 0.5,
 	}),
 	farm: Object.freeze({
 		label: 'Farm',
 		cost: 1200,
+		upkeepAnnual: 70,
+		refundRate: 0.5,
 	}),
 	factory: Object.freeze({
 		label: 'Factory',
 		cost: 4000,
+		upkeepAnnual: 260,
+		refundRate: 0.45,
+	}),
+	road: Object.freeze({
+		label: 'Road',
+		cost: 300,
+		upkeepAnnual: 55,
+		refundRate: 0.35,
 	}),
 });
 
@@ -23,6 +35,7 @@ export const Camera = defineComponent('Camera', {
 
 export const BuildMode = defineComponent('BuildMode', {
 	selectedKind: 'house',
+	overlayMode: 'stats',
 	tileSize: 64,
 	groundY: 420,
 });
@@ -46,14 +59,33 @@ export const World3State = defineComponent('World3State', {
 	houses: 0,
 	farms: 0,
 	factories: 0,
+	roads: 0,
+	connectedHouses: 0,
+	connectedFarms: 0,
+	connectedFactories: 0,
+	roadCoverage: 0,
+	foodDelivered: 0,
+	foodShortfall: 0,
+	laborDelivered: 0,
+	goodsDemand: 0,
+	goodsDelivered: 0,
+	servicesDemand: 0,
+	servicesDelivered: 0,
 	workersAvailable: 0,
 	workersUsed: 0,
 	factoryUtilization: 0,
+	commuterTraffic: 0,
+	freightTraffic: 0,
+	serviceTraffic: 0,
+	trafficLoad: 0,
 	money: 10000,
 	taxRevenueAnnual: 0,
 	serviceCostsAnnual: 0,
 	netRevenueAnnual: 0,
+	history: [],
+	historySampleTimer: 0,
 	lastActionText: 'Start zoning. Every building costs money.',
 	lastActionTimer: 0,
+	simTime: 0,
 	timeOfDay: 0.58,
 });

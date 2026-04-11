@@ -1,4 +1,4 @@
-import { BUILDING_DEFS, BuildMode, Building, Camera, World3State } from '../components.js';
+import { BUILDING_DEFS, BuildMode, Building, Camera, UNDERLAY_KINDS, World3State } from '../components.js';
 
 const styleByKind = {
   house: { width: 52, height: 38 },
@@ -8,7 +8,10 @@ const styleByKind = {
   civic: { width: 58, height: 54 },
   logistics: { width: 62, height: 34 },
   plumbing: { width: 58, height: 44 },
+  power: { width: 64, height: 50 },
   road: { width: 64, height: 18 },
+  pipe: { width: 64, height: 8 },
+  powerline: { width: 64, height: 56 },
 };
 
 const BUILD_TOOL_ORDER = Object.freeze(Object.keys(BUILDING_DEFS));
@@ -21,6 +24,7 @@ const TRIP_COLOR_BY_ORIGIN = Object.freeze({
   civic: '#cbd5e1',
   logistics: '#22c55e',
   plumbing: '#38bdf8',
+  power: '#fbbf24',
 });
 
 function formatMoney(amount) {
@@ -144,8 +148,10 @@ function drawWorld3Overlay(context, canvas, model) {
     `Services: ${formatMoney(model.serviceCostsAnnual)}/yr`,
     `Net: ${formatMoney(model.netRevenueAnnual)}/yr`,
     `Population: ${Math.round(model.population).toLocaleString()}`,
-    `Placed H/F/Fx/C/Cv/L/P/R: ${model.houses} / ${model.farms} / ${model.factories} / ${model.commercials} / ${model.civics} / ${model.logistics} / ${model.plumbings} / ${model.roads}`,
-    `Road access all: ${model.connectedHouses}/${model.connectedFarms}/${model.connectedFactories}/${model.connectedCommercials}/${model.connectedCivics}/${model.connectedLogistics}/${model.connectedPlumbings}`,
+    `Placed H/F/Fx/C/Cv/L/Pw/Pm/R/Pi/El: ${model.houses} / ${model.farms} / ${model.factories} / ${model.commercials} / ${model.civics} / ${model.logistics} / ${model.plumbings} / ${model.powerPlants} / ${model.roads} / ${model.pipes} / ${model.powerLines}`,
+    `Road access all: ${model.connectedHouses}/${model.connectedFarms}/${model.connectedFactories}/${model.connectedCommercials}/${model.connectedCivics}/${model.connectedLogistics}/${model.connectedPlumbings}/${model.connectedPowerPlants}`,
+    `Utilities W/S/P: ${Math.round(model.waterDelivered)} / ${Math.round(model.sewerHandled)} / ${Math.round(model.powerDelivered)}`,
+    `Utility demand W/S/P: ${Math.round(model.waterDemand)} / ${Math.round(model.sewerDemand)} / ${Math.round(model.powerDemand)}`,
     `Food delivered: ${Math.round(model.foodDelivered)} / ${Math.round(model.foodDemand)}`,
     `Goods delivered: ${Math.round(model.goodsDelivered)} / ${Math.round(model.goodsDemand)}`,
     `Services delivered: ${Math.round(model.servicesDelivered)} / ${Math.round(model.servicesDemand)}`,
@@ -153,7 +159,9 @@ function drawWorld3Overlay(context, canvas, model) {
     `Factory util: ${(model.factoryUtilization * 100).toFixed(0)}%  •  Civic ${(model.civicEffect * 100).toFixed(0)}%`,
     `Traffic C/F/S: ${Math.round(model.commuterTraffic)} / ${Math.round(model.freightTraffic)} / ${Math.round(model.serviceTraffic)}`,
     `Congestion: ${(model.trafficLoad * 100).toFixed(0)}%  •  Logistics ${(model.logisticsEffect * 100).toFixed(0)}%`,
-    `Plumbing: ${(model.plumbingEffect * 100).toFixed(0)}%  •  Pollution: ${model.pollution.toFixed(2)}`,
+    `Pipe ${(model.pipeCoverage * 100).toFixed(0)}%  •  Power ${(model.powerCoverage * 100).toFixed(0)}%`,
+    `Plumbing: ${(model.plumbingEffect * 100).toFixed(0)}%  •  Power ${(model.powerEffect * 100).toFixed(0)}%`,
+    `Pollution: ${model.pollution.toFixed(2)}`,
     `QoL: ${model.qualityOfLife.toFixed(2)}  •  TOD: ${Math.round(model.timeOfDay * 24)}:00`,
   ];
 
@@ -467,6 +475,39 @@ function drawRoad(context, x, groundY, style) {
   context.strokeRect(x, top, style.width, style.height);
 }
 
+function drawPipe(context, x, groundY, style) {
+  const y = groundY + 12;
+  context.strokeStyle = '#38bdf8';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(x + 4, y);
+  context.lineTo(x + style.width - 4, y);
+  context.stroke();
+  context.fillStyle = '#0c4a6e';
+  context.fillRect(x + 12, y - 2, 8, 4);
+  context.fillRect(x + style.width - 20, y - 2, 8, 4);
+}
+
+function drawPowerLine(context, x, groundY, style) {
+  const leftPoleX = x + 10;
+  const rightPoleX = x + style.width - 10;
+  const poleTop = groundY - style.height + 8;
+  const poleBottom = groundY + 12;
+  context.strokeStyle = '#d97706';
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(leftPoleX, poleTop);
+  context.lineTo(leftPoleX, poleBottom);
+  context.moveTo(rightPoleX, poleTop);
+  context.lineTo(rightPoleX, poleBottom);
+  context.stroke();
+  context.strokeStyle = '#fbbf24';
+  context.beginPath();
+  context.moveTo(leftPoleX, poleTop + 4);
+  context.quadraticCurveTo(x + style.width * 0.5, poleTop + 12, rightPoleX, poleTop + 4);
+  context.stroke();
+}
+
 function drawHouse(context, x, groundY, style) {
   const y = groundY - style.height;
   const left = x + 3;
@@ -623,10 +664,37 @@ function drawPlumbing(context, x, groundY, style) {
   context.fill();
 }
 
+function drawPowerPlant(context, x, groundY, style) {
+  const y = groundY - style.height;
+  const left = x + 2;
+
+  context.fillStyle = '#78350f';
+  context.fillRect(left + 4, y + 14, style.width - 8, style.height - 14);
+  context.fillStyle = '#fbbf24';
+  context.fillRect(left + 10, y + 20, 12, 12);
+  context.fillRect(left + 28, y + 20, 12, 12);
+  context.fillRect(left + 46, y + 20, 10, 12);
+  context.fillStyle = '#f59e0b';
+  context.fillRect(left + 12, y + 2, 10, 18);
+  context.fillRect(left + 42, y + 6, 10, 14);
+}
+
 function drawBuilding(context, kind, x, groundY, worldX = 0) {
   const style = styleByKind[kind] || styleByKind.house;
+  if (kind === 'pipe') {
+    drawPipe(context, x, groundY, style);
+    return;
+  }
+  if (kind === 'powerline') {
+    drawPowerLine(context, x, groundY, style);
+    return;
+  }
   if (kind === 'road') {
     drawRoad(context, x, groundY, style);
+    return;
+  }
+  if (kind === 'power') {
+    drawPowerPlant(context, x, groundY, style);
     return;
   }
   if (kind === 'plumbing') {
@@ -711,8 +779,8 @@ function collectVisibleLots(world, cameraX, canvasWidth) {
   for (const [id, building] of world.query(Building)) {
     const sx = building.x - cameraX;
     if (sx < -120 || sx > canvasWidth + 120) continue;
-    const lot = lots.get(building.x) || { x: building.x, screenX: sx, road: null, structure: null };
-    if (building.kind === 'road') lot.road = { id, building };
+    const lot = lots.get(building.x) || { x: building.x, screenX: sx, road: null, pipe: null, powerline: null, structure: null };
+    if (UNDERLAY_KINDS.includes(building.kind)) lot[building.kind] = { id, building };
     else lot.structure = { id, building };
     lots.set(building.x, lot);
   }
@@ -758,20 +826,28 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
       context.stroke();
     }
 
-    const counts = { house: 0, farm: 0, factory: 0, road: 0 };
+    const counts = { house: 0, farm: 0, factory: 0, road: 0, pipe: 0, powerline: 0 };
     const smokeOrigins = [];
     const activeSmokeKeys = new Set();
     const occupied = new Map();
     const visibleLots = collectVisibleLots(world, cameraX, canvas.width);
     for (const lot of visibleLots) {
+      if (lot.pipe) {
+        counts.pipe += 1;
+        drawBuilding(context, 'pipe', lot.screenX, groundY, lot.x);
+      }
       if (lot.road) {
         counts.road += 1;
         drawBuilding(context, 'road', lot.screenX, groundY, lot.x);
       }
+      if (lot.powerline) {
+        counts.powerline += 1;
+        drawBuilding(context, 'powerline', lot.screenX, groundY, lot.x);
+      }
       if (lot.structure) {
         counts[lot.structure.building.kind] = (counts[lot.structure.building.kind] || 0) + 1;
       }
-      occupied.set(lot.x, Boolean(lot.road || lot.structure));
+      occupied.set(lot.x, Boolean(lot.road || lot.pipe || lot.powerline || lot.structure));
     }
 
     drawTraffic(context, cameraX, groundY, model || { currentTrips: [], simTime: 0 });
@@ -827,7 +903,7 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
     if (selectedKind === 'bulldoze') {
       drawBulldozeGhost(context, ghostScreenX, groundY, tileSize, occupied.get(snappedWorldX));
     } else {
-      if (selectedKind === 'road') {
+      if (UNDERLAY_KINDS.includes(selectedKind)) {
         context.globalAlpha = canAffordSelection ? 0.5 : 0.2;
         drawBuilding(context, selectedKind, ghostScreenX, groundY, snappedWorldX);
       } else {
@@ -868,7 +944,8 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
         `tab ${overlayMode}`,
         model ? `treasury ${formatMoney(model.money)}` : null,
         model ? `net ${formatMoney(model.netRevenueAnnual)}/yr` : null,
-        model ? `lots ${model.houses}/${model.farms}/${model.factories}/${model.commercials}/${model.civics}/${model.logistics}/${model.plumbings}/${model.roads}` : null,
+        model ? `lots ${model.houses}/${model.farms}/${model.factories}/${model.commercials}/${model.civics}/${model.logistics}/${model.plumbings}/${model.powerPlants}/${model.roads}/${model.pipes}/${model.powerLines}` : null,
+        model ? `utility ${Math.round(model.waterDelivered)}/${Math.round(model.sewerHandled)}/${Math.round(model.powerDelivered)}` : null,
         model ? `flows ${Math.round(model.foodDelivered)}/${Math.round(model.goodsDelivered)}/${Math.round(model.servicesDelivered)}` : null,
         model ? `traffic ${Math.round(model.commuterTraffic)}/${Math.round(model.freightTraffic)}/${Math.round(model.serviceTraffic)}` : null,
         `smoke ${smokeStats.activeParticles}/${smokeStats.emitters}`,

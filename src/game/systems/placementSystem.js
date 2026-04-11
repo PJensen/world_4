@@ -1,4 +1,4 @@
-import { BUILDING_DEFS, BuildMode, Building, Camera, World3State } from '../components.js';
+import { BUILDING_DEFS, BuildMode, Building, Camera, UNDERLAY_KINDS, World3State } from '../components.js';
 
 function tileSnap(value, tileSize) {
   return Math.floor(value / tileSize) * tileSize;
@@ -12,6 +12,28 @@ function setWorldMessage(world, id, model, lastActionText) {
   };
   world.set(id, World3State, nextModel);
   return nextModel;
+}
+
+function createLot(x) {
+  return {
+    x,
+    road: null,
+    pipe: null,
+    powerline: null,
+    structure: null,
+  };
+}
+
+function getBulldozeTarget(lot) {
+  if (lot.structure) return lot.structure;
+  if (lot.road) return lot.road;
+  if (lot.pipe) return lot.pipe;
+  if (lot.powerline) return lot.powerline;
+  return null;
+}
+
+function isLotEmpty(lot) {
+  return !lot.structure && !lot.road && !lot.pipe && !lot.powerline;
 }
 
 export function createPlacementSystem(controls) {
@@ -32,8 +54,8 @@ export function createPlacementSystem(controls) {
     let model = stateTuple[1];
     const occupied = new Map();
     for (const [id, building] of world.query(Building)) {
-      const lot = occupied.get(building.x) || { road: null, structure: null };
-      if (building.kind === 'road') lot.road = { id, building };
+      const lot = occupied.get(building.x) || createLot(building.x);
+      if (UNDERLAY_KINDS.includes(building.kind)) lot[building.kind] = { id, building };
       else lot.structure = { id, building };
       occupied.set(building.x, lot);
     }
@@ -41,10 +63,10 @@ export function createPlacementSystem(controls) {
     for (const request of requests) {
       const worldX = camera.x + request.screenX;
       const snappedX = tileSnap(worldX, mode.tileSize);
-      const lot = occupied.get(snappedX) || { road: null, structure: null };
+      const lot = occupied.get(snappedX) || createLot(snappedX);
 
       if (request.kind === 'bulldoze') {
-        const target = lot.structure || lot.road;
+        const target = getBulldozeTarget(lot);
         if (!target) {
           model = setWorldMessage(world, stateId, model, 'Nothing to bulldoze on that lot.');
           continue;
@@ -53,7 +75,9 @@ export function createPlacementSystem(controls) {
         world.destroy(target.id);
         if (lot.structure && lot.structure.id === target.id) lot.structure = null;
         else if (lot.road && lot.road.id === target.id) lot.road = null;
-        if (!lot.structure && !lot.road) occupied.delete(snappedX);
+        else if (lot.pipe && lot.pipe.id === target.id) lot.pipe = null;
+        else if (lot.powerline && lot.powerline.id === target.id) lot.powerline = null;
+        if (isLotEmpty(lot)) occupied.delete(snappedX);
         else occupied.set(snappedX, lot);
 
         const rule = BUILDING_DEFS[target.building.kind];
@@ -70,9 +94,9 @@ export function createPlacementSystem(controls) {
         continue;
       }
 
-      if (request.kind === 'road') {
-        if (lot.road) {
-          model = setWorldMessage(world, stateId, model, 'That lot already has a road.');
+      if (UNDERLAY_KINDS.includes(request.kind)) {
+        if (lot[request.kind]) {
+          model = setWorldMessage(world, stateId, model, `That lot already has a ${BUILDING_DEFS[request.kind].label.toLowerCase()}.`);
           continue;
         }
       } else if (lot.structure) {
@@ -88,7 +112,7 @@ export function createPlacementSystem(controls) {
 
       const e = world.create();
       world.add(e, Building, { kind: request.kind, x: snappedX });
-      if (request.kind === 'road') lot.road = { id: e, building: { kind: request.kind, x: snappedX } };
+  if (UNDERLAY_KINDS.includes(request.kind)) lot[request.kind] = { id: e, building: { kind: request.kind, x: snappedX } };
       else lot.structure = { id: e, building: { kind: request.kind, x: snappedX } };
       occupied.set(snappedX, lot);
       model = {

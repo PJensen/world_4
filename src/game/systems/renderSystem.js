@@ -229,6 +229,8 @@ function drawSeriesGroup(context, history, panel) {
   });
   drawPlotFrame(context, plotX, plotY, plotWidth, plotHeight, bounds);
 
+  const endpointLabels = [];
+
   seriesList.forEach((series) => {
     context.strokeStyle = series.color;
     context.lineWidth = 1.6;
@@ -249,6 +251,13 @@ function drawSeriesGroup(context, history, panel) {
     context.beginPath();
     context.arc(latestX, latestY, 2.5, 0, Math.PI * 2);
     context.fill();
+
+    endpointLabels.push({
+      label: `${series.label} ${formatCompactNumber(latest)}`,
+      color: series.color,
+      x: latestX + 6,
+      y: latestY + 3,
+    });
   });
 
   drawFittedText(context, formatCompactNumber(bounds.max), plotX, plotY - 4, 72, {
@@ -260,20 +269,29 @@ function drawSeriesGroup(context, history, panel) {
     color: '#94a3b8',
   });
 
+  endpointLabels
+    .sort((left, right) => left.y - right.y)
+    .forEach((entry, index) => {
+      const previous = index > 0 ? endpointLabels[index - 1] : null;
+      if (previous && entry.y - previous.y < 12) entry.y = previous.y + 12;
+    });
+
+  endpointLabels.forEach((entry) => {
+    drawFittedText(context, entry.label, Math.min(entry.x, legendX - 6), entry.y, Math.max(44, legendX - entry.x - 6), {
+      maxFontSize: 9,
+      minFontSize: 8,
+      color: entry.color,
+    });
+  });
+
   seriesList.forEach((series, index) => {
-    const latest = Number(history[history.length - 1]?.[series.key] || 0);
-    const legendY = plotY + 10 + index * 16;
+    const legendY = plotY + 12 + index * 16;
     context.fillStyle = series.color;
     context.fillRect(legendX, legendY - 6, 10, 4);
     drawFittedText(context, series.label, legendX + 16, legendY, legendWidth - 20, {
       maxFontSize: 10,
       fontWeight: 'bold',
       color: '#e2e8f0',
-    });
-    drawFittedText(context, formatCompactNumber(latest), legendX + 16, legendY + 11, legendWidth - 20, {
-      maxFontSize: 10,
-      minFontSize: 8,
-      color: '#94a3b8',
     });
   });
 }

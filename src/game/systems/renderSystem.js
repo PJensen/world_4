@@ -214,12 +214,12 @@ function drawPlotFrame(context, x, y, width, height, bounds) {
 
 function drawSeriesGroup(context, history, panel) {
   const { x, y, width, height, title, seriesList } = panel;
-  const legendWidth = Math.max(92, Math.min(124, Math.floor(width * 0.34)));
+  const labelGutter = Math.max(110, Math.min(148, Math.floor(width * 0.34)));
   const plotX = x + 8;
   const plotY = y + 22;
-  const plotWidth = width - legendWidth - 20;
+  const plotWidth = width - labelGutter - 18;
   const plotHeight = height - 42;
-  const legendX = plotX + plotWidth + 12;
+  const labelX = plotX + plotWidth + 10;
   const bounds = getSeriesBounds(history, seriesList);
 
   drawFittedText(context, title, x + 8, y + 14, width - 16, {
@@ -255,8 +255,9 @@ function drawSeriesGroup(context, history, panel) {
     endpointLabels.push({
       label: `${series.label} ${formatCompactNumber(latest)}`,
       color: series.color,
-      x: latestX + 6,
+      x: labelX,
       y: latestY + 3,
+      anchorX: latestX,
     });
   });
 
@@ -274,26 +275,29 @@ function drawSeriesGroup(context, history, panel) {
     .forEach((entry, index) => {
       const previous = index > 0 ? endpointLabels[index - 1] : null;
       if (previous && entry.y - previous.y < 12) entry.y = previous.y + 12;
+      entry.y = Math.max(plotY + 8, Math.min(plotY + plotHeight + 10, entry.y));
     });
 
   endpointLabels.forEach((entry) => {
-    drawFittedText(context, entry.label, Math.min(entry.x, legendX - 6), entry.y, Math.max(44, legendX - entry.x - 6), {
+    context.strokeStyle = entry.color;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(entry.anchorX + 3, entry.y - 3);
+    context.lineTo(labelX - 4, entry.y - 3);
+    context.stroke();
+
+    drawFittedText(context, entry.label, entry.x, entry.y, labelGutter - 10, {
       maxFontSize: 9,
       minFontSize: 8,
       color: entry.color,
     });
   });
 
-  seriesList.forEach((series, index) => {
-    const legendY = plotY + 12 + index * 16;
-    context.fillStyle = series.color;
-    context.fillRect(legendX, legendY - 6, 10, 4);
-    drawFittedText(context, series.label, legendX + 16, legendY, legendWidth - 20, {
-      maxFontSize: 10,
-      fontWeight: 'bold',
-      color: '#e2e8f0',
-    });
-  });
+  context.strokeStyle = 'rgba(148, 163, 184, 0.1)';
+  context.beginPath();
+  context.moveTo(labelX - 8, plotY);
+  context.lineTo(labelX - 8, plotY + plotHeight);
+  context.stroke();
 }
 
 function drawStatsOverlay(context, canvas, model) {

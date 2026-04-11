@@ -4,6 +4,9 @@ const styleByKind = {
   house: { width: 52, height: 38 },
   farm: { width: 60, height: 30 },
   factory: { width: 62, height: 48 },
+  commercial: { width: 60, height: 42 },
+  civic: { width: 58, height: 54 },
+  logistics: { width: 62, height: 34 },
   road: { width: 64, height: 18 },
 };
 
@@ -131,15 +134,15 @@ function drawWorld3Overlay(context, canvas, model) {
     `Services: ${formatMoney(model.serviceCostsAnnual)}/yr`,
     `Net: ${formatMoney(model.netRevenueAnnual)}/yr`,
     `Population: ${Math.round(model.population).toLocaleString()}`,
-    `Placed H/F/Fx/R: ${model.houses} / ${model.farms} / ${model.factories} / ${model.roads}`,
-    `Road access H/F/Fx: ${model.connectedHouses}/${model.connectedFarms}/${model.connectedFactories} (${(model.roadCoverage * 100).toFixed(0)}%)`,
+    `Placed H/F/Fx/C/Cv/L/R: ${model.houses} / ${model.farms} / ${model.factories} / ${model.commercials} / ${model.civics} / ${model.logistics} / ${model.roads}`,
+    `Road access all: ${model.connectedHouses}/${model.connectedFarms}/${model.connectedFactories}/${model.connectedCommercials}/${model.connectedCivics}/${model.connectedLogistics}`,
     `Food delivered: ${Math.round(model.foodDelivered)} / ${Math.round(model.foodDemand)}`,
     `Goods delivered: ${Math.round(model.goodsDelivered)} / ${Math.round(model.goodsDemand)}`,
     `Services delivered: ${Math.round(model.servicesDelivered)} / ${Math.round(model.servicesDemand)}`,
     `Workers: ${Math.round(model.workersUsed)} / ${Math.round(model.workersAvailable)}`,
-    `Factory util: ${(model.factoryUtilization * 100).toFixed(0)}%`,
+    `Factory util: ${(model.factoryUtilization * 100).toFixed(0)}%  •  Civic ${(model.civicEffect * 100).toFixed(0)}%`,
     `Traffic C/F/S: ${Math.round(model.commuterTraffic)} / ${Math.round(model.freightTraffic)} / ${Math.round(model.serviceTraffic)}`,
-    `Congestion: ${(model.trafficLoad * 100).toFixed(0)}%  •  Pollution: ${model.pollution.toFixed(2)}`,
+    `Congestion: ${(model.trafficLoad * 100).toFixed(0)}%  •  Logistics ${(model.logisticsEffect * 100).toFixed(0)}%`,
     `QoL: ${model.qualityOfLife.toFixed(2)}  •  TOD: ${Math.round(model.timeOfDay * 24)}:00`,
   ];
 
@@ -307,6 +310,7 @@ function drawStatsOverlay(context, canvas, model) {
         { key: 'money', label: 'Bankroll', color: '#fca5a5' },
         { key: 'population', label: 'Population', color: '#f8fafc' },
         { key: 'netRevenue', label: 'Net', color: '#fde047' },
+        { key: 'qualityOfLife', label: 'QoL', color: '#a7f3d0', includeZero: false },
       ],
     },
     {
@@ -500,10 +504,82 @@ function drawFactory(context, x, groundY, style, worldX = 0) {
   }
 }
 
+function drawCommercial(context, x, groundY, style) {
+  const y = groundY - style.height;
+  const left = x + 2;
+
+  context.fillStyle = '#1d4ed8';
+  context.fillRect(left, y + 10, style.width, style.height - 10);
+  context.fillStyle = '#f8fafc';
+  context.fillRect(left + 4, y + 18, style.width - 8, 10);
+  context.fillStyle = '#0f172a';
+  context.fillRect(left + 24, y + 28, 12, style.height - 18);
+
+  const awningColors = ['#ef4444', '#f8fafc', '#ef4444', '#f8fafc', '#ef4444'];
+  awningColors.forEach((color, index) => {
+    context.fillStyle = color;
+    context.fillRect(left + 4 + index * 10, y + 8, 10, 12);
+  });
+}
+
+function drawCivic(context, x, groundY, style) {
+  const y = groundY - style.height;
+  const left = x + 3;
+
+  context.fillStyle = '#cbd5e1';
+  context.fillRect(left + 6, y + 18, style.width - 12, style.height - 18);
+  context.fillStyle = '#94a3b8';
+  context.beginPath();
+  context.moveTo(left, y + 18);
+  context.lineTo(left + style.width * 0.5, y + 2);
+  context.lineTo(left + style.width, y + 18);
+  context.closePath();
+  context.fill();
+  context.fillStyle = '#1e293b';
+  for (let index = 0; index < 3; index += 1) {
+    context.fillRect(left + 13 + index * 10, y + 26, 4, style.height - 26);
+  }
+  context.fillStyle = '#f59e0b';
+  context.beginPath();
+  context.arc(left + style.width * 0.5, y + 10, 5, 0, Math.PI * 2);
+  context.fill();
+}
+
+function drawLogistics(context, x, groundY, style) {
+  const y = groundY - style.height;
+  const left = x + 1;
+
+  context.fillStyle = '#475569';
+  context.fillRect(left, y + 12, style.width, style.height - 12);
+  context.fillStyle = '#64748b';
+  context.fillRect(left + 6, y + 4, 20, 12);
+  context.fillRect(left + 30, y + 18, 24, 8);
+  context.fillStyle = '#22c55e';
+  context.fillRect(left + 8, y + 18, 14, 8);
+  context.fillStyle = '#0f172a';
+  context.fillRect(left + 8, y + 28, 16, 12);
+  context.fillRect(left + 32, y + 28, 22, 12);
+  context.fillStyle = '#f8fafc';
+  context.fillRect(left + 41, y + 8, 3, 16);
+  context.fillRect(left + 44, y + 8, 8, 3);
+}
+
 function drawBuilding(context, kind, x, groundY, worldX = 0) {
   const style = styleByKind[kind] || styleByKind.house;
   if (kind === 'road') {
     drawRoad(context, x, groundY, style);
+    return;
+  }
+  if (kind === 'logistics') {
+    drawLogistics(context, x, groundY, style);
+    return;
+  }
+  if (kind === 'civic') {
+    drawCivic(context, x, groundY, style);
+    return;
+  }
+  if (kind === 'commercial') {
+    drawCommercial(context, x, groundY, style);
     return;
   }
   if (kind === 'factory') {
@@ -722,7 +798,7 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
         `tab ${overlayMode}`,
         model ? `treasury ${formatMoney(model.money)}` : null,
         model ? `net ${formatMoney(model.netRevenueAnnual)}/yr` : null,
-        model ? `lots ${model.houses}/${model.farms}/${model.factories}/${model.roads}` : null,
+        model ? `lots ${model.houses}/${model.farms}/${model.factories}/${model.commercials}/${model.civics}/${model.logistics}/${model.roads}` : null,
         model ? `flows ${Math.round(model.foodDelivered)}/${Math.round(model.goodsDelivered)}/${Math.round(model.servicesDelivered)}` : null,
         model ? `traffic ${Math.round(model.commuterTraffic)}/${Math.round(model.freightTraffic)}/${Math.round(model.serviceTraffic)}` : null,
         `smoke ${smokeStats.activeParticles}/${smokeStats.emitters}`,

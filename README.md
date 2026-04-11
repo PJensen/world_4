@@ -39,12 +39,15 @@ Then open:
 ## Economy loop
 
 - You start with `$10,000` in the treasury.
-- Every placement costs money: house `$1,500`, farm `$1,200`, factory `$4,000`, road `$300`.
+- Every placement costs money: house `$1,500`, farm `$1,200`, factory `$4,000`, commercial `$2,600`, civic `$3,400`, logistics `$3,000`, road `$300`.
 - Roads can be placed under buildings, so a finished lot can contain both a road and a structure.
 - Bulldozing refunds part of the original lot cost.
 - Houses provide housing capacity and taxpayers.
 - Farms feed the city, which improves survival and growth.
 - Factories drive industrial output and the strongest tax intake, but add pollution.
+- Commercial buildings consume goods and turn them into delivered services and tax revenue.
+- Civic buildings cost money to run but improve quality of life.
+- Logistics buildings increase throughput and relieve traffic pressure across the road network.
 - Road-connected lots exchange labor, food, goods, and services through contiguous road networks.
 - Taxes and service costs are collected continuously, so the treasury rises or falls while the sim runs.
 

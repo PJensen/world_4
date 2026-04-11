@@ -1,4 +1,4 @@
-import { BUILDING_DEFS, BuildMode, Building, Camera, UNDERLAY_KINDS, World3State } from '../components.js';
+import { BUILDING_DEFS, BuildMode, Building, Camera, UNDERLAY_KINDS, VIEW_ZOOM, World3State } from '../components.js';
 
 const styleByKind = {
   house: { width: 52, height: 38 },
@@ -97,6 +97,15 @@ function drawSmokeSource(context, x, y) {
   context.arc(x, y - 2, 16, 0, Math.PI * 2);
   context.fill();
   context.restore();
+}
+
+function getPowerPlantStackOrigins(x, groundY, style) {
+  const y = groundY - style.height;
+  const left = x + 2;
+  return [
+    { x: left + 17, y: y + 2 },
+    { x: left + 47, y: y + 6 },
+  ];
 }
 
 function drawSky(context, canvas, groundY, timeOfDay = 0.58) {
@@ -464,48 +473,153 @@ function drawPlacementHud(context, canvas, selectedKind, money, message, overlay
 }
 
 function drawRoad(context, x, groundY, style) {
-  const top = groundY + 16;
-  context.fillStyle = '#0f172a';
+  const top = groundY;
+  context.fillStyle = '#1c1c1c';
   context.fillRect(x, top, style.width, style.height);
-  context.fillStyle = '#475569';
+  context.fillStyle = '#4a4a4a';
+  context.fillRect(x, top, style.width, 2);
+  context.fillRect(x, top + style.height - 1, style.width, 1);
+  context.fillStyle = '#ca8a04';
   for (let dash = 0; dash < 4; dash += 1) {
-    context.fillRect(x + 6 + dash * 14, top + 8, 8, 2);
+    context.fillRect(x + 5 + dash * 15, top + 8, 9, 2);
   }
-  context.strokeStyle = '#64748b';
-  context.strokeRect(x, top, style.width, style.height);
+  context.fillStyle = 'rgba(255, 255, 255, 0.1)';
+  context.fillRect(x, top + 5, style.width, 1);
+  context.fillRect(x, top + 13, style.width, 1);
 }
 
 function drawPipe(context, x, groundY, style) {
-  const y = groundY + 12;
-  context.strokeStyle = '#38bdf8';
-  context.lineWidth = 3;
+  const waterY = groundY + 26;
+  context.fillStyle = '#0369a1';
+  context.fillRect(x, waterY - 3, style.width, 6);
+  context.fillStyle = '#38bdf8';
+  context.fillRect(x, waterY - 3, style.width, 2);
+  context.fillStyle = '#0284c7';
+  context.fillRect(x + 2, waterY - 5, 6, 10);
+  context.fillRect(x + style.width - 8, waterY - 5, 6, 10);
+  context.fillStyle = '#7dd3fc';
   context.beginPath();
-  context.moveTo(x + 4, y);
-  context.lineTo(x + style.width - 4, y);
-  context.stroke();
-  context.fillStyle = '#0c4a6e';
-  context.fillRect(x + 12, y - 2, 8, 4);
-  context.fillRect(x + style.width - 20, y - 2, 8, 4);
+  context.arc(x + style.width * 0.3, waterY, 1.5, 0, Math.PI * 2);
+  context.arc(x + style.width * 0.5, waterY, 1.5, 0, Math.PI * 2);
+  context.arc(x + style.width * 0.7, waterY, 1.5, 0, Math.PI * 2);
+  context.fill();
+
+  const sewerY = groundY + 46;
+  context.fillStyle = '#365314';
+  context.fillRect(x, sewerY - 4, style.width, 8);
+  context.fillStyle = '#1a2e05';
+  context.fillRect(x, sewerY + 2, style.width, 2);
+  context.fillStyle = '#4d7c0f';
+  context.fillRect(x, sewerY - 4, style.width, 2);
+  context.fillStyle = '#3f6212';
+  context.fillRect(x + 1, sewerY - 6, 8, 12);
+  context.fillRect(x + style.width - 9, sewerY - 6, 8, 12);
 }
 
 function drawPowerLine(context, x, groundY, style) {
   const leftPoleX = x + 10;
   const rightPoleX = x + style.width - 10;
   const poleTop = groundY - style.height + 8;
-  const poleBottom = groundY + 12;
-  context.strokeStyle = '#d97706';
-  context.lineWidth = 2;
+  const poleBottom = groundY;
+
+  context.strokeStyle = '#78350f';
+  context.lineWidth = 3;
   context.beginPath();
   context.moveTo(leftPoleX, poleTop);
   context.lineTo(leftPoleX, poleBottom);
   context.moveTo(rightPoleX, poleTop);
   context.lineTo(rightPoleX, poleBottom);
   context.stroke();
-  context.strokeStyle = '#fbbf24';
+
+  context.strokeStyle = '#92400e';
+  context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(leftPoleX, poleTop + 4);
-  context.quadraticCurveTo(x + style.width * 0.5, poleTop + 12, rightPoleX, poleTop + 4);
+  context.moveTo(leftPoleX - 6, poleTop + 2);
+  context.lineTo(leftPoleX + 6, poleTop + 2);
+  context.moveTo(rightPoleX - 6, poleTop + 2);
+  context.lineTo(rightPoleX + 6, poleTop + 2);
   context.stroke();
+
+  context.fillStyle = '#d4d4d8';
+  context.fillRect(leftPoleX - 5, poleTop, 2, 4);
+  context.fillRect(leftPoleX + 4, poleTop, 2, 4);
+  context.fillRect(rightPoleX - 5, poleTop, 2, 4);
+  context.fillRect(rightPoleX + 4, poleTop, 2, 4);
+
+  context.strokeStyle = '#fbbf24';
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(leftPoleX, poleTop + 3);
+  context.quadraticCurveTo(x + style.width * 0.5, poleTop + 14, rightPoleX, poleTop + 3);
+  context.stroke();
+
+  context.strokeStyle = '#f59e0b';
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(leftPoleX, poleTop + 6);
+  context.quadraticCurveTo(x + style.width * 0.5, poleTop + 18, rightPoleX, poleTop + 6);
+  context.stroke();
+}
+
+function drawPowerLineConnection(context, fromScreenX, toScreenX, groundY, tileWidth, style) {
+  const fromPoleX = fromScreenX + tileWidth - 10;
+  const toPoleX = toScreenX + 10;
+  const poleTop = groundY - style.height + 8;
+  const midX = (fromPoleX + toPoleX) * 0.5;
+
+  context.strokeStyle = '#fbbf24';
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(fromPoleX, poleTop + 3);
+  context.quadraticCurveTo(midX, poleTop + 16, toPoleX, poleTop + 3);
+  context.stroke();
+
+  context.strokeStyle = '#f59e0b';
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(fromPoleX, poleTop + 6);
+  context.quadraticCurveTo(midX, poleTop + 20, toPoleX, poleTop + 6);
+  context.stroke();
+}
+
+function drawUnderground(context, canvasWidth, groundY, canvasHeight) {
+  context.fillStyle = '#292524';
+  context.fillRect(0, groundY, canvasWidth, 18);
+  context.fillStyle = '#57534e';
+  context.fillRect(0, groundY, canvasWidth, 2);
+
+  context.fillStyle = '#3b2507';
+  context.fillRect(0, groundY + 18, canvasWidth, 14);
+  context.fillStyle = 'rgba(14, 116, 144, 0.06)';
+  context.fillRect(0, groundY + 20, canvasWidth, 14);
+
+  context.fillStyle = '#2d1b06';
+  context.fillRect(0, groundY + 32, canvasWidth, 18);
+  context.fillStyle = 'rgba(63, 98, 18, 0.05)';
+  context.fillRect(0, groundY + 40, canvasWidth, 14);
+
+  context.fillStyle = '#1f1505';
+  context.fillRect(0, groundY + 50, canvasWidth, Math.max(0, canvasHeight - groundY - 50));
+
+  const bedrockY = groundY + 66;
+  if (bedrockY < canvasHeight) {
+    context.fillStyle = '#1c1917';
+    context.fillRect(0, bedrockY, canvasWidth, canvasHeight - bedrockY);
+    context.fillStyle = '#292524';
+    for (let rx = 0; rx < canvasWidth; rx += 40) {
+      context.fillRect(rx + 3, bedrockY + 3, 20, 2);
+      context.fillRect(rx + 14, bedrockY + 9, 16, 2);
+    }
+  }
+}
+
+function drawBuildingShadow(context, x, groundY, width) {
+  context.save();
+  context.fillStyle = 'rgba(0, 0, 0, 0.18)';
+  context.beginPath();
+  context.ellipse(x + width * 0.5, groundY + 2, width * 0.55, 4, 0, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
 }
 
 function drawHouse(context, x, groundY, style) {
@@ -670,13 +784,32 @@ function drawPowerPlant(context, x, groundY, style) {
 
   context.fillStyle = '#78350f';
   context.fillRect(left + 4, y + 14, style.width - 8, style.height - 14);
+  context.fillStyle = '#451a03';
+  context.fillRect(left + 4, y + style.height - 8, style.width - 8, 8);
+
   context.fillStyle = '#fbbf24';
   context.fillRect(left + 10, y + 20, 12, 12);
   context.fillRect(left + 28, y + 20, 12, 12);
   context.fillRect(left + 46, y + 20, 10, 12);
-  context.fillStyle = '#f59e0b';
+  context.fillStyle = '#92400e';
+  context.fillRect(left + 12, y + 23, 8, 2);
+  context.fillRect(left + 30, y + 23, 8, 2);
+  context.fillRect(left + 48, y + 23, 6, 2);
+
+  context.fillStyle = '#57534e';
   context.fillRect(left + 12, y + 2, 10, 18);
+  context.fillStyle = '#78716c';
+  context.fillRect(left + 12, y + 2, 10, 3);
+  context.fillStyle = '#dc2626';
+  context.fillRect(left + 12, y + 4, 10, 2);
+  context.fillRect(left + 12, y + 10, 10, 2);
+
+  context.fillStyle = '#57534e';
   context.fillRect(left + 42, y + 6, 10, 14);
+  context.fillStyle = '#78716c';
+  context.fillRect(left + 42, y + 6, 10, 3);
+  context.fillStyle = '#dc2626';
+  context.fillRect(left + 42, y + 8, 10, 2);
 }
 
 function drawBuilding(context, kind, x, groundY, worldX = 0) {
@@ -744,9 +877,9 @@ function drawTraffic(context, cameraX, groundY, model) {
   if (!trips.length) return;
 
   const laneByCategory = {
-    commute: { yOffset: 22, speed: 0.85, divisor: 42, radius: 2.8 },
-    freight: { yOffset: 28, speed: 0.5, divisor: 56, radius: 3.8 },
-    service: { yOffset: 34, speed: 0.7, divisor: 48, radius: 2.4 },
+    commute: { yOffset: 5, speed: 0.85, divisor: 42, radius: 2.8 },
+    freight: { yOffset: 10, speed: 0.5, divisor: 56, radius: 3.8 },
+    service: { yOffset: 15, speed: 0.7, divisor: 48, radius: 2.4 },
   };
 
   trips.forEach((trip, tripIndex) => {
@@ -795,14 +928,12 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
 
     let cameraX = 0;
     let tileSize = 64;
-    let groundY = Math.max(340, Math.min(canvas.height - 120, Math.round(canvas.height * 0.82)));
     let selectedKind = controls.getSelectedKind();
     let overlayMode = controls.getOverlayMode ? controls.getOverlayMode() : 'overview';
     let model = null;
     for (const [id, camera, mode] of world.query(Camera, BuildMode)) {
       cameraX = camera.x;
       tileSize = mode.tileSize;
-      groundY = Math.max(mode.groundY, Math.min(canvas.height - 120, Math.round(canvas.height * 0.82)));
       selectedKind = mode.selectedKind;
       overlayMode = mode.overlayMode;
       break;
@@ -811,18 +942,23 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
     const modelTuple = world.query(World3State)[Symbol.iterator]().next().value;
     model = modelTuple ? modelTuple[1] : null;
 
-    drawSky(context, canvas, groundY, model ? model.timeOfDay : 0.58);
+    const vw = canvas.width / VIEW_ZOOM;
+    const vh = canvas.height / VIEW_ZOOM;
+    const groundY = Math.max(200, Math.min(vh - 70, Math.round(vh * 0.64)));
 
-    context.fillStyle = '#1e293b';
-    context.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+    context.save();
+    context.scale(VIEW_ZOOM, VIEW_ZOOM);
 
-    context.strokeStyle = '#334155';
+    drawSky(context, { width: vw, height: vh }, groundY, model ? model.timeOfDay : 0.58);
+    drawUnderground(context, vw, groundY, vh);
+
+    context.strokeStyle = 'rgba(100, 80, 60, 0.15)';
     context.lineWidth = 1;
     const startGridX = -((cameraX % tileSize + tileSize) % tileSize);
-    for (let x = startGridX; x <= canvas.width; x += tileSize) {
+    for (let gx = startGridX; gx <= vw; gx += tileSize) {
       context.beginPath();
-      context.moveTo(x, groundY);
-      context.lineTo(x, canvas.height);
+      context.moveTo(gx, groundY);
+      context.lineTo(gx, vh);
       context.stroke();
     }
 
@@ -830,19 +966,28 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
     const smokeOrigins = [];
     const activeSmokeKeys = new Set();
     const occupied = new Map();
-    const visibleLots = collectVisibleLots(world, cameraX, canvas.width);
+    const visibleLots = collectVisibleLots(world, cameraX, vw);
+
     for (const lot of visibleLots) {
       if (lot.pipe) {
         counts.pipe += 1;
         drawBuilding(context, 'pipe', lot.screenX, groundY, lot.x);
       }
+    }
+
+    for (const lot of visibleLots) {
       if (lot.road) {
         counts.road += 1;
         drawBuilding(context, 'road', lot.screenX, groundY, lot.x);
       }
+    }
+
+    const powerLineLots = [];
+    for (const lot of visibleLots) {
       if (lot.powerline) {
         counts.powerline += 1;
         drawBuilding(context, 'powerline', lot.screenX, groundY, lot.x);
+        powerLineLots.push(lot);
       }
       if (lot.structure) {
         counts[lot.structure.building.kind] = (counts[lot.structure.building.kind] || 0) + 1;
@@ -850,11 +995,22 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
       occupied.set(lot.x, Boolean(lot.road || lot.pipe || lot.powerline || lot.structure));
     }
 
+    const plStyle = styleByKind.powerline;
+    for (let i = 0; i < powerLineLots.length - 1; i += 1) {
+      const curr = powerLineLots[i];
+      const next = powerLineLots[i + 1];
+      if (next.x - curr.x === tileSize) {
+        drawPowerLineConnection(context, curr.screenX, next.screenX, groundY, tileSize, plStyle);
+      }
+    }
+
     drawTraffic(context, cameraX, groundY, model || { currentTrips: [], simTime: 0 });
 
     for (const lot of visibleLots) {
       if (!lot.structure) continue;
       const { id, building } = lot.structure;
+      const bStyle = styleByKind[building.kind] || styleByKind.house;
+      drawBuildingShadow(context, lot.screenX, groundY, bStyle.width);
       drawBuilding(context, building.kind, lot.screenX, groundY, building.x);
 
       if (building.kind === 'factory') {
@@ -889,13 +1045,46 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
           });
         }
       }
+
+      if (building.kind === 'power') {
+        const style = styleByKind.power;
+        const stacks = getPowerPlantStackOrigins(lot.screenX, groundY, style);
+        for (let stackIndex = 0; stackIndex < stacks.length; stackIndex += 1) {
+          drawSmokeSource(context, stacks[stackIndex].x, stacks[stackIndex].y);
+          const key = `power:${id}:stack:${stackIndex}`;
+          activeSmokeKeys.add(key);
+          smokeFx.ensureEmitter(key, {
+            rate: 14,
+            speed: 14,
+            speedJitter: 0.4,
+            spread: Math.PI / 6,
+            life: 2.8,
+            lifeJitter: 0.3,
+            size: 10,
+            sizeEnd: 30,
+            alpha0: 0.4,
+            alpha1: 0,
+            ax: 5,
+            ay: -10,
+            offsetY: -4,
+            blur: 8,
+            colorA: { r: 80, g: 80, b: 80 },
+            colorB: { r: 160, g: 160, b: 170 },
+          });
+          smokeOrigins.push({
+            key,
+            x: stacks[stackIndex].x,
+            y: stacks[stackIndex].y,
+          });
+        }
+      }
     }
 
     smokeFx.syncEmitters(activeSmokeKeys);
     smokeFx.step(dt, smokeOrigins);
     smokeFx.render(context);
 
-    const pointerX = controls.getPointerX();
+    const pointerX = controls.getPointerX() / VIEW_ZOOM;
     const snappedWorldX = Math.floor((cameraX + pointerX) / tileSize) * tileSize;
     const ghostScreenX = snappedWorldX - cameraX;
     const selectedRule = BUILDING_DEFS[selectedKind] || BUILDING_DEFS.house;
@@ -921,6 +1110,8 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
         context.fillRect(ghostScreenX, groundY - 72, tileSize, 72);
       }
     }
+
+    context.restore();
 
     drawPlacementHud(
       context,

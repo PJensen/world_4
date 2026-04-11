@@ -1,4 +1,4 @@
-import { BUILDING_DEFS } from './components.js';
+import { BUILDING_DEFS, VIEW_ZOOM } from './components.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -120,7 +120,7 @@ export function createBuildControls(canvas, target = window) {
     if (totalDx > 8 || totalDy > 8) state.pointerMoved = true;
 
     if (state.pointerType === 'touch' || state.pointerType === 'pen') {
-      state.panDelta -= dx;
+      state.panDelta -= dx / VIEW_ZOOM;
     }
     state.pointerLastX = pos.x;
     event.preventDefault();
@@ -132,7 +132,7 @@ export function createBuildControls(canvas, target = window) {
     if (state.pointerId == null || event.pointerId !== state.pointerId) return;
 
     if (!state.pointerMoved && pos.y > 54) {
-      state.placementRequests.push({ screenX: pos.x, kind: state.selectedKind });
+      state.placementRequests.push({ screenX: pos.x / VIEW_ZOOM, kind: state.selectedKind });
     }
 
     if (typeof canvas.releasePointerCapture === 'function' && state.pointerId != null) {

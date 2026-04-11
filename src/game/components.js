@@ -71,6 +71,8 @@ export const BUILDING_DEFS = Object.freeze({
 
 export const UNDERLAY_KINDS = Object.freeze(['road', 'pipe', 'powerline']);
 
+export const VIEW_ZOOM = 1.5;
+
 export const Camera = defineComponent('Camera', {
 	x: 0,
 	speed: 420,

@@ -2,6 +2,8 @@
 
 Side-scrolling placement simulator built with the `ecs-js` submodule.
 
+[Play Now](https://pjensen.github.io/world_4/src)
+
 ## Run locally
 
 From the repo root:

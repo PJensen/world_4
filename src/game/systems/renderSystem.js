@@ -222,10 +222,11 @@ function drawSeriesGroup(context, history, panel) {
   const labelX = plotX + plotWidth + 10;
   const bounds = getSeriesBounds(history, seriesList);
 
-  drawFittedText(context, title, x + 8, y + 14, width - 16, {
+  drawFittedText(context, title, plotX + plotWidth - 4, y + 14, plotWidth - 8, {
     maxFontSize: 11,
     fontWeight: 'bold',
     color: '#e2e8f0',
+    align: 'right',
   });
   drawPlotFrame(context, plotX, plotY, plotWidth, plotHeight, bounds);
 

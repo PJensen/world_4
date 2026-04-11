@@ -7,7 +7,8 @@ const styleByKind = {
   road: { width: 64, height: 18 },
 };
 
-const TOOL_ORDER = ['house', 'farm', 'factory', 'road', 'bulldoze'];
+const BUILD_TOOL_ORDER = Object.freeze(Object.keys(BUILDING_DEFS));
+const TOOL_ORDER = [...BUILD_TOOL_ORDER, 'bulldoze'];
 
 function formatMoney(amount) {
   return `$${Math.round(amount).toLocaleString()}`;
@@ -151,15 +152,135 @@ function drawWorld3Overlay(context, canvas, model) {
   });
 }
 
+function formatCompactNumber(value) {
+  const abs = Math.abs(value);
+  if (abs >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
+  return Math.round(value).toLocaleString();
+}
+
+function getSeriesBounds(history, seriesList) {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+
+  for (const series of seriesList) {
+    for (const sample of history) {
+      const value = Number(sample[series.key] || 0);
+      min = Math.min(min, value);
+      max = Math.max(max, value);
+    }
+    if (series.includeZero !== false) {
+      min = Math.min(min, 0);
+      max = Math.max(max, 0);
+    }
+  }
+
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return { min: 0, max: 1 };
+  if (min === max) {
+    const spread = Math.max(1, Math.abs(max) * 0.1);
+    return { min: min - spread, max: max + spread };
+  }
+
+  const padding = (max - min) * 0.08;
+  return { min: min - padding, max: max + padding };
+}
+
+function drawPlotFrame(context, x, y, width, height, bounds) {
+  context.strokeStyle = 'rgba(148, 163, 184, 0.2)';
+  context.strokeRect(x, y, width, height);
+
+  for (let row = 0; row <= 3; row += 1) {
+    const lineY = y + (height / 3) * row;
+    context.strokeStyle = 'rgba(148, 163, 184, 0.14)';
+    context.beginPath();
+    context.moveTo(x, lineY);
+    context.lineTo(x + width, lineY);
+    context.stroke();
+  }
+
+  if (bounds.min < 0 && bounds.max > 0) {
+    const zeroY = y + height - ((0 - bounds.min) / (bounds.max - bounds.min)) * height;
+    context.strokeStyle = 'rgba(248, 250, 252, 0.3)';
+    context.beginPath();
+    context.moveTo(x, zeroY);
+    context.lineTo(x + width, zeroY);
+    context.stroke();
+  }
+}
+
+function drawSeriesGroup(context, history, panel) {
+  const { x, y, width, height, title, seriesList } = panel;
+  const legendWidth = 138;
+  const plotX = x + 8;
+  const plotY = y + 22;
+  const plotWidth = width - legendWidth - 20;
+  const plotHeight = height - 42;
+  const legendX = plotX + plotWidth + 12;
+  const bounds = getSeriesBounds(history, seriesList);
+
+  drawFittedText(context, title, x + 8, y + 14, width - 16, {
+    maxFontSize: 11,
+    fontWeight: 'bold',
+    color: '#e2e8f0',
+  });
+  drawPlotFrame(context, plotX, plotY, plotWidth, plotHeight, bounds);
+
+  seriesList.forEach((series) => {
+    context.strokeStyle = series.color;
+    context.lineWidth = 1.6;
+    context.beginPath();
+    history.forEach((sample, index) => {
+      const value = Number(sample[series.key] || 0);
+      const px = plotX + (index / Math.max(1, history.length - 1)) * plotWidth;
+      const py = plotY + plotHeight - ((value - bounds.min) / (bounds.max - bounds.min)) * plotHeight;
+      if (index === 0) context.moveTo(px, py);
+      else context.lineTo(px, py);
+    });
+    context.stroke();
+
+    const latest = Number(history[history.length - 1]?.[series.key] || 0);
+    const latestX = plotX + plotWidth;
+    const latestY = plotY + plotHeight - ((latest - bounds.min) / (bounds.max - bounds.min)) * plotHeight;
+    context.fillStyle = series.color;
+    context.beginPath();
+    context.arc(latestX, latestY, 2.5, 0, Math.PI * 2);
+    context.fill();
+  });
+
+  drawFittedText(context, formatCompactNumber(bounds.max), plotX, plotY - 4, 72, {
+    maxFontSize: 9,
+    color: '#94a3b8',
+  });
+  drawFittedText(context, formatCompactNumber(bounds.min), plotX, plotY + plotHeight + 12, 72, {
+    maxFontSize: 9,
+    color: '#94a3b8',
+  });
+
+  seriesList.forEach((series, index) => {
+    const latest = Number(history[history.length - 1]?.[series.key] || 0);
+    const legendY = plotY + 10 + index * 16;
+    context.fillStyle = series.color;
+    context.fillRect(legendX, legendY - 6, 10, 4);
+    drawFittedText(context, series.label, legendX + 16, legendY, legendWidth - 20, {
+      maxFontSize: 10,
+      fontWeight: 'bold',
+      color: '#e2e8f0',
+    });
+    drawFittedText(context, formatCompactNumber(latest), legendX + 16, legendY + 11, legendWidth - 20, {
+      maxFontSize: 10,
+      minFontSize: 8,
+      color: '#94a3b8',
+    });
+  });
+}
+
 function drawStatsOverlay(context, canvas, model) {
-  const panelWidth = Math.min(canvas.width - 24, 720);
-  const panelHeight = 266;
-  const x = 12;
+  const marginX = 18;
+  const panelWidth = canvas.width - marginX * 2;
+  const panelHeight = 336;
+  const x = marginX;
   const y = 72;
-  const plotX = x + 14;
-  const plotY = y + 34;
-  const plotWidth = panelWidth - 28;
-  const plotHeight = 124;
 
   context.fillStyle = 'rgba(2, 6, 23, 0.82)';
   context.fillRect(x, y, panelWidth, panelHeight);
@@ -171,83 +292,71 @@ function drawStatsOverlay(context, canvas, model) {
     fontWeight: 'bold',
     color: '#e2e8f0',
   });
-  drawFittedText(context, 'Road-network deliveries, bankroll, population, and traffic over time', x + 104, y + 18, panelWidth - 116, {
+  drawFittedText(context, 'Conventional full-history charts for economy, flows, and traffic', x + 104, y + 18, panelWidth - 116, {
     maxFontSize: 12,
     minFontSize: 9,
     color: '#cbd5e1',
   });
 
-  context.strokeStyle = 'rgba(148, 163, 184, 0.18)';
-  for (let row = 0; row <= 4; row += 1) {
-    const lineY = plotY + (plotHeight / 4) * row;
-    context.beginPath();
-    context.moveTo(plotX, lineY);
-    context.lineTo(plotX + plotWidth, lineY);
-    context.stroke();
-  }
-
   const history = Array.isArray(model.history) ? model.history : [];
-  const seriesDefs = [
-    { key: 'foodDelivered', label: 'Food', color: '#86efac', formatter: (value) => Math.round(value).toLocaleString() },
-    { key: 'goodsDelivered', label: 'Goods', color: '#93c5fd', formatter: (value) => Math.round(value).toLocaleString() },
-    { key: 'servicesDelivered', label: 'Services', color: '#c084fc', formatter: (value) => Math.round(value).toLocaleString() },
-    { key: 'money', label: 'Bankroll', color: '#fca5a5', formatter: (value) => formatMoney(value) },
-    { key: 'population', label: 'Population', color: '#f8fafc', formatter: (value) => Math.round(value).toLocaleString() },
-    { key: 'netRevenue', label: 'Net', color: '#fde047', formatter: (value) => `${formatMoney(value)}/yr` },
-    { key: 'pollution', label: 'Pollution', color: '#f59e0b', formatter: (value) => value.toFixed(2) },
-    { key: 'commuterTraffic', label: 'Commuters', color: '#22d3ee', formatter: (value) => Math.round(value).toLocaleString() },
-    { key: 'freightTraffic', label: 'Freight', color: '#f97316', formatter: (value) => Math.round(value).toLocaleString() },
-    { key: 'serviceTraffic', label: 'Service', color: '#facc15', formatter: (value) => Math.round(value).toLocaleString() },
+  const warmupThreshold = 12;
+  const groups = [
+    {
+      title: 'Economy',
+      seriesList: [
+        { key: 'money', label: 'Bankroll', color: '#fca5a5' },
+        { key: 'population', label: 'Population', color: '#f8fafc' },
+        { key: 'netRevenue', label: 'Net', color: '#fde047' },
+      ],
+    },
+    {
+      title: 'Delivered Flows',
+      seriesList: [
+        { key: 'foodDelivered', label: 'Food', color: '#86efac' },
+        { key: 'goodsDelivered', label: 'Goods', color: '#93c5fd' },
+        { key: 'servicesDelivered', label: 'Services', color: '#c084fc' },
+      ],
+    },
+    {
+      title: 'Traffic And Load',
+      seriesList: [
+        { key: 'commuterTraffic', label: 'Commuters', color: '#22d3ee' },
+        { key: 'freightTraffic', label: 'Freight', color: '#f97316' },
+        { key: 'serviceTraffic', label: 'Service', color: '#facc15' },
+        { key: 'pollution', label: 'Pollution', color: '#f59e0b' },
+      ],
+    },
   ];
 
-  if (history.length > 1) {
-    seriesDefs.forEach((series) => {
-      const values = history.map((sample) => Number(sample[series.key] || 0));
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const span = max - min || 1;
-
-      context.strokeStyle = series.color;
-      context.lineWidth = 1.5;
-      context.beginPath();
-      history.forEach((sample, index) => {
-        const value = Number(sample[series.key] || 0);
-        const px = plotX + (index / (history.length - 1)) * plotWidth;
-        const py = plotY + plotHeight - ((value - min) / span) * plotHeight;
-        if (index === 0) context.moveTo(px, py);
-        else context.lineTo(px, py);
+  if (history.length >= warmupThreshold) {
+    groups.forEach((group, index) => {
+      drawSeriesGroup(context, history, {
+        x: x + 12,
+        y: y + 34 + index * 92,
+        width: panelWidth - 24,
+        height: 86,
+        title: group.title,
+        seriesList: group.seriesList,
       });
-      context.stroke();
     });
   } else {
-    drawFittedText(context, 'History will populate as the city runs.', plotX, plotY + plotHeight * 0.55, plotWidth, {
+    context.fillStyle = 'rgba(15, 23, 42, 0.7)';
+    context.fillRect(x + 12, y + 34, panelWidth - 24, 276);
+    context.strokeStyle = 'rgba(148, 163, 184, 0.18)';
+    context.strokeRect(x + 12, y + 34, panelWidth - 24, 276);
+    drawFittedText(context, 'Collecting enough history for a real graph...', x + panelWidth / 2, y + 146, panelWidth - 80, {
+      maxFontSize: 16,
+      minFontSize: 12,
+      color: '#e2e8f0',
+      fontWeight: 'bold',
+      align: 'center',
+    });
+    drawFittedText(context, `${history.length}/${warmupThreshold} samples captured`, x + panelWidth / 2, y + 170, panelWidth - 80, {
       maxFontSize: 12,
       color: '#94a3b8',
+      align: 'center',
     });
   }
-
-  seriesDefs.forEach((series, index) => {
-    const column = index < 5 ? 0 : 1;
-    const row = index % 5;
-    const legendColumnWidth = (panelWidth - 40) / 2;
-    const legendX = x + 14 + column * legendColumnWidth;
-    const legendY = y + 182 + row * 14;
-    const latest = history.length ? history[history.length - 1][series.key] : 0;
-    context.fillStyle = series.color;
-    context.fillRect(legendX, legendY - 7, 10, 4);
-    drawFittedText(
-      context,
-      `${series.label}: ${series.formatter(Number(latest || 0))}`,
-      legendX + 16,
-      legendY,
-      legendColumnWidth - 28,
-      {
-        maxFontSize: 11,
-        minFontSize: 9,
-        color: '#cbd5e1',
-      },
-    );
-  });
 }
 
 function drawPlacementHud(context, canvas, selectedKind, money, message, overlayMode) {

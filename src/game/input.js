@@ -1,11 +1,12 @@
+import { BUILDING_DEFS } from './components.js';
+
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-const TOOL_KEYS = Object.freeze({
-  '1': 'house',
-  '2': 'farm',
-  '3': 'factory',
-  '4': 'road',
-});
+const BUILD_TOOL_KINDS = Object.freeze(Object.keys(BUILDING_DEFS));
+
+const TOOL_KEYS = Object.freeze(Object.fromEntries(
+  BUILD_TOOL_KINDS.slice(0, 9).map((kind, index) => [String(index + 1), kind]),
+));
 
 function eventToCanvasPosition(event, canvas) {
   const rect = canvas.getBoundingClientRect();
@@ -80,7 +81,7 @@ export function createBuildControls(canvas, target = window) {
     const pos = eventToCanvasPosition(event, canvas);
 
     if (pos.y <= 56) {
-      const toolKinds = ['house', 'farm', 'factory', 'road', 'bulldoze'];
+      const toolKinds = [...BUILD_TOOL_KINDS, 'bulldoze'];
       const toggleWidth = 132;
       const toolAreaWidth = canvas.width - toggleWidth;
       if (pos.x < toolAreaWidth) {

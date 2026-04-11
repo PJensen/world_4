@@ -214,7 +214,7 @@ function drawPlotFrame(context, x, y, width, height, bounds) {
 
 function drawSeriesGroup(context, history, panel) {
   const { x, y, width, height, title, seriesList } = panel;
-  const legendWidth = 138;
+  const legendWidth = Math.max(92, Math.min(124, Math.floor(width * 0.34)));
   const plotX = x + 8;
   const plotY = y + 22;
   const plotWidth = width - legendWidth - 20;
@@ -281,7 +281,7 @@ function drawSeriesGroup(context, history, panel) {
 function drawStatsOverlay(context, canvas, model) {
   const marginX = 18;
   const panelWidth = canvas.width - marginX * 2;
-  const panelHeight = 336;
+  const panelHeight = 186;
   const x = marginX;
   const y = 72;
 
@@ -333,29 +333,31 @@ function drawStatsOverlay(context, canvas, model) {
   ];
 
   if (history.length >= warmupThreshold) {
+    const innerGap = 10;
+    const groupWidth = (panelWidth - 24 - innerGap * (groups.length - 1)) / groups.length;
     groups.forEach((group, index) => {
       drawSeriesGroup(context, history, {
-        x: x + 12,
-        y: y + 34 + index * 92,
-        width: panelWidth - 24,
-        height: 86,
+        x: x + 12 + index * (groupWidth + innerGap),
+        y: y + 34,
+        width: groupWidth,
+        height: 126,
         title: group.title,
         seriesList: group.seriesList,
       });
     });
   } else {
     context.fillStyle = 'rgba(15, 23, 42, 0.7)';
-    context.fillRect(x + 12, y + 34, panelWidth - 24, 276);
+    context.fillRect(x + 12, y + 34, panelWidth - 24, 126);
     context.strokeStyle = 'rgba(148, 163, 184, 0.18)';
-    context.strokeRect(x + 12, y + 34, panelWidth - 24, 276);
-    drawFittedText(context, 'Collecting enough history for a real graph...', x + panelWidth / 2, y + 146, panelWidth - 80, {
+    context.strokeRect(x + 12, y + 34, panelWidth - 24, 126);
+    drawFittedText(context, 'Collecting enough history for a real graph...', x + panelWidth / 2, y + 92, panelWidth - 80, {
       maxFontSize: 16,
       minFontSize: 12,
       color: '#e2e8f0',
       fontWeight: 'bold',
       align: 'center',
     });
-    drawFittedText(context, `${history.length}/${warmupThreshold} samples captured`, x + panelWidth / 2, y + 170, panelWidth - 80, {
+    drawFittedText(context, `${history.length}/${warmupThreshold} samples captured`, x + panelWidth / 2, y + 116, panelWidth - 80, {
       maxFontSize: 12,
       color: '#94a3b8',
       align: 'center',

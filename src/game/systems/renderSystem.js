@@ -1,10 +1,14 @@
-import { BuildMode, Building, Camera, World3State } from '../components.js';
+import { BUILDING_DEFS, BuildMode, Building, Camera, World3State } from '../components.js';
 
 const styleByKind = {
   house: { width: 52, height: 38 },
   farm: { width: 60, height: 30 },
   factory: { width: 62, height: 48 },
 };
+
+function formatMoney(amount) {
+  return `$${Math.round(amount).toLocaleString()}`;
+}
 
 function getFactoryVariant(style, worldX = 0) {
   const variantSeed = Math.abs(Math.floor(worldX / 16));
@@ -77,7 +81,7 @@ function drawSky(context, canvas, groundY, timeOfDay = 0.58) {
 
 function drawWorld3Overlay(context, canvas, model) {
   const panelWidth = 260;
-  const panelHeight = 190;
+  const panelHeight = 216;
   const x = canvas.width - panelWidth - 12;
   const y = 12;
 
@@ -91,13 +95,17 @@ function drawWorld3Overlay(context, canvas, model) {
   context.fillText('World3 Live Overlay', x + 10, y + 18);
 
   const rows = [
-    `Population: ${(model.population / 1e9).toFixed(2)} B`,
+    `Treasury: ${formatMoney(model.money)}`,
+    `Tax flow: ${formatMoney(model.taxRevenueAnnual)}/yr`,
+    `Services: ${formatMoney(model.serviceCostsAnnual)}/yr`,
+    `Net: ${formatMoney(model.netRevenueAnnual)}/yr`,
+    `Population: ${Math.round(model.population).toLocaleString()}`,
     `Placed H/F/Fx: ${model.houses} / ${model.farms} / ${model.factories}`,
     `Resources: ${(model.resources * 100).toFixed(1)}%`,
     `Pollution: ${model.pollution.toFixed(2)}`,
-    `Food / cap: ${model.foodPerCapita.toFixed(2)}`,
+    `Food: ${Math.round(model.foodOutput)} / ${Math.round(model.foodDemand)}  (${model.foodPerCapita.toFixed(2)}x)`,
     `Industry idx: ${model.industrialOutput.toFixed(2)}`,
-    `Workers: ${(model.workersUsed / 1e6).toFixed(2)}M / ${(model.workersAvailable / 1e6).toFixed(2)}M`,
+    `Workers: ${Math.round(model.workersUsed)} / ${Math.round(model.workersAvailable)}`,
     `Factory util: ${(model.factoryUtilization * 100).toFixed(0)}%`,
     `Birth/Death: ${(model.birthRate * 100).toFixed(2)}% / ${(model.deathRate * 100).toFixed(2)}%`,
     `QoL: ${model.qualityOfLife.toFixed(2)}  •  TOD: ${Math.round(model.timeOfDay * 24)}:00`,
@@ -107,6 +115,44 @@ function drawWorld3Overlay(context, canvas, model) {
   rows.forEach((line, index) => {
     context.fillText(line, x + 10, y + 36 + index * 14);
   });
+}
+
+function drawPlacementHud(context, canvas, selectedKind, money, message) {
+  const kinds = ['house', 'farm', 'factory'];
+  const segmentWidth = canvas.width / kinds.length;
+
+  context.fillStyle = 'rgba(2, 6, 23, 0.86)';
+  context.fillRect(0, 0, canvas.width, 56);
+  context.strokeStyle = '#334155';
+  context.beginPath();
+  context.moveTo(0, 56);
+  context.lineTo(canvas.width, 56);
+  context.stroke();
+
+  kinds.forEach((kind, index) => {
+    const rule = BUILDING_DEFS[kind];
+    const canAfford = money >= rule.cost;
+    const isSelected = kind === selectedKind;
+    const x = index * segmentWidth;
+
+    context.fillStyle = isSelected
+      ? (canAfford ? 'rgba(14, 116, 144, 0.6)' : 'rgba(153, 27, 27, 0.55)')
+      : 'rgba(15, 23, 42, 0.35)';
+    context.fillRect(x + 1, 1, segmentWidth - 2, 54);
+
+    context.fillStyle = isSelected ? '#f8fafc' : '#cbd5e1';
+    context.font = 'bold 13px system-ui, sans-serif';
+    context.fillText(rule.label, x + 14, 21);
+    context.font = '12px system-ui, sans-serif';
+    context.fillStyle = canAfford ? '#93c5fd' : '#fca5a5';
+    context.fillText(formatMoney(rule.cost), x + 14, 40);
+  });
+
+  context.fillStyle = '#e2e8f0';
+  context.font = '13px system-ui, sans-serif';
+  context.fillText(`Treasury ${formatMoney(money)}`, 12, canvas.height - 18);
+  context.fillStyle = '#cbd5e1';
+  context.fillText(message, 180, canvas.height - 18);
 }
 
 function drawHouse(context, x, groundY, style) {
@@ -287,13 +333,24 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
     const pointerX = controls.getPointerX();
     const snappedWorldX = Math.floor((cameraX + pointerX) / tileSize) * tileSize;
     const ghostScreenX = snappedWorldX - cameraX;
-    context.globalAlpha = 0.45;
+    const selectedRule = BUILDING_DEFS[selectedKind] || BUILDING_DEFS.house;
+    const canAffordSelection = !model || model.money >= selectedRule.cost;
+    context.globalAlpha = canAffordSelection ? 0.45 : 0.2;
     drawBuilding(context, selectedKind, ghostScreenX, groundY, snappedWorldX);
     context.globalAlpha = 1;
 
-    context.fillStyle = '#cbd5e1';
-    context.font = '13px system-ui, sans-serif';
-    context.fillText('1:House  2:Farm  3:Factory  •  A/D or ←/→ to scroll  •  Click/Tap to place', 12, 22);
+    if (!canAffordSelection) {
+      context.fillStyle = 'rgba(239, 68, 68, 0.18)';
+      context.fillRect(ghostScreenX, groundY - 72, tileSize, 72);
+    }
+
+    drawPlacementHud(
+      context,
+      canvas,
+      selectedKind,
+      model ? model.money : 0,
+      model ? model.lastActionText : 'Build carefully.',
+    );
 
     if (model) drawWorld3Overlay(context, canvas, model);
 
@@ -301,14 +358,16 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
       const smokeStats = smokeFx.stats();
       hud.textContent = [
         `camera ${cameraX.toFixed(0)}m`,
-        `selected ${selectedKind}`,
+        `selected ${selectedKind} ${formatMoney(selectedRule.cost)}`,
+        model ? `treasury ${formatMoney(model.money)}` : null,
+        model ? `net ${formatMoney(model.netRevenueAnnual)}/yr` : null,
         `houses ${counts.house}`,
         `farms ${counts.farm}`,
         `factories ${counts.factory}`,
         `smoke ${smokeStats.activeParticles}/${smokeStats.emitters}`,
-        model ? `workers ${(model.workersUsed / 1e6).toFixed(2)}M/${(model.workersAvailable / 1e6).toFixed(2)}M` : null,
+        model ? `workers ${Math.round(model.workersUsed)}/${Math.round(model.workersAvailable)}` : null,
         model ? `util ${(model.factoryUtilization * 100).toFixed(0)}%` : null,
-        model ? `pop ${(model.population / 1e9).toFixed(2)}B` : null,
+        model ? `pop ${Math.round(model.population).toLocaleString()}` : null,
       ].filter(Boolean).join(' · ');
     }
   };

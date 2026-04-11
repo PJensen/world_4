@@ -39,6 +39,7 @@ function buildRoadComponents(lots) {
         commercials: [],
         civics: [],
         logistics: [],
+        plumbings: [],
       };
       components.push(current);
     }
@@ -58,6 +59,7 @@ function buildRoadComponents(lots) {
       commercial: 'commercials',
       civic: 'civics',
       logistics: 'logistics',
+      plumbing: 'plumbings',
     };
     const bucket = bucketByKind[lot.structure.building.kind];
     if (bucket) component[bucket].push(lot);
@@ -170,7 +172,7 @@ function collapseTrips(trips) {
 }
 
 export function world3System(world, dt) {
-  const counts = { house: 0, farm: 0, factory: 0, commercial: 0, civic: 0, logistics: 0, road: 0 };
+  const counts = { house: 0, farm: 0, factory: 0, commercial: 0, civic: 0, logistics: 0, plumbing: 0, road: 0 };
   const buildings = [];
   for (const [id, building] of world.query(Building)) {
     buildings.push({ id, building });
@@ -186,9 +188,10 @@ export function world3System(world, dt) {
   const commercials = counts.commercial;
   const civics = counts.civic;
   const logistics = counts.logistics;
+  const plumbings = counts.plumbing;
   const roads = counts.road;
 
-  const connected = { house: 0, farm: 0, factory: 0, commercial: 0, civic: 0, logistics: 0 };
+  const connected = { house: 0, farm: 0, factory: 0, commercial: 0, civic: 0, logistics: 0, plumbing: 0 };
   for (const component of components) {
     connected.house += component.houses.length;
     connected.farm += component.farms.length;
@@ -196,10 +199,11 @@ export function world3System(world, dt) {
     connected.commercial += component.commercials.length;
     connected.civic += component.civics.length;
     connected.logistics += component.logistics.length;
+    connected.plumbing += component.plumbings.length;
   }
 
-  const totalServiceLots = houses + farms + factories + commercials + civics + logistics;
-  const connectedLots = connected.house + connected.farm + connected.factory + connected.commercial + connected.civic + connected.logistics;
+  const totalServiceLots = houses + farms + factories + commercials + civics + logistics + plumbings;
+  const connectedLots = connected.house + connected.farm + connected.factory + connected.commercial + connected.civic + connected.logistics + connected.plumbing;
   const roadCoverage = totalServiceLots > 0 ? connectedLots / totalServiceLots : 0;
   const houseAccessRatio = houses > 0 ? connected.house / houses : 1;
   const farmAccessRatio = farms > 0 ? connected.farm / farms : 1;
@@ -207,6 +211,7 @@ export function world3System(world, dt) {
   const commercialAccessRatio = commercials > 0 ? connected.commercial / commercials : 1;
   const civicAccessRatio = civics > 0 ? connected.civic / civics : 1;
   const logisticsAccessRatio = logistics > 0 ? connected.logistics / logistics : 1;
+  const plumbingAccessRatio = plumbings > 0 ? connected.plumbing / plumbings : 1;
 
   const factoryScale = Math.max(0, factories * 0.9);
   const farmScale = Math.max(0, farms * 220);
@@ -234,9 +239,12 @@ export function world3System(world, dt) {
   const COMMERCIAL_LABOR_PER_BUILDING = 55;
   const CIVIC_LABOR_PER_BUILDING = 26;
   const LOGISTICS_LABOR_PER_BUILDING = 38;
+  const PLUMBING_LABOR_PER_BUILDING = 24;
   const SERVICES_PER_COMMERCIAL = 170;
+  const SERVICES_PER_PLUMBING = 150;
   const CIVIC_QOL_PER_BUILDING = 0.06;
   const LOGISTICS_THROUGHPUT_PER_BUILDING = 0.22;
+  const PLUMBING_SANITATION_PER_BUILDING = 0.08;
 
   for (const [id, model] of world.query(World3State)) {
     const resources = clamp(model.resources, 0, 1);
@@ -263,6 +271,7 @@ export function world3System(world, dt) {
     let servicesDelivered = 0;
     let civicEffect = 1;
     let logisticsEffect = 1;
+    let plumbingEffect = 1;
     const currentTrips = [];
 
     const connectedHouseTotal = Math.max(1, connected.house);
@@ -273,6 +282,7 @@ export function world3System(world, dt) {
       const componentCommercials = component.commercials.length;
       const componentCivics = component.civics.length;
       const componentLogistics = component.logistics.length;
+      const componentPlumbings = component.plumbings.length;
       const componentPopulation = populationBase * (componentHouses / connectedHouseTotal);
 
       const houseNodes = component.houses.map((lot) => makeNode(
@@ -289,6 +299,7 @@ export function world3System(world, dt) {
       const commercialNodes = component.commercials.map((lot) => makeNode(lot, COMMERCIAL_LABOR_PER_BUILDING, 'commercial'));
       const civicNodes = component.civics.map((lot) => makeNode(lot, CIVIC_LABOR_PER_BUILDING, 'civic'));
       const logisticsNodes = component.logistics.map((lot) => makeNode(lot, LOGISTICS_LABOR_PER_BUILDING, 'logistics'));
+      const plumbingNodes = component.plumbings.map((lot) => makeNode(lot, PLUMBING_LABOR_PER_BUILDING, 'plumbing'));
 
       const componentFoodDemand = houseNodes.reduce((sum, node) => sum + node.amount * 1.05, 0);
       const componentLaborSupply = houseNodes.reduce((sum, node) => sum + node.amount * LABOR_SHARE, 0);
@@ -296,7 +307,8 @@ export function world3System(world, dt) {
       const commercialLaborDemand = componentCommercials * COMMERCIAL_LABOR_PER_BUILDING;
       const civicLaborDemand = componentCivics * CIVIC_LABOR_PER_BUILDING;
       const logisticsLaborDemand = componentLogistics * LOGISTICS_LABOR_PER_BUILDING;
-      const componentLaborDemand = factoryLaborDemand + commercialLaborDemand + civicLaborDemand + logisticsLaborDemand;
+      const plumbingLaborDemand = componentPlumbings * PLUMBING_LABOR_PER_BUILDING;
+      const componentLaborDemand = factoryLaborDemand + commercialLaborDemand + civicLaborDemand + logisticsLaborDemand + plumbingLaborDemand;
       const foodSuppliers = farmNodes.map((node) => ({ ...node, remaining: node.amount }));
       const foodConsumers = houseNodes.map((node) => ({
         x: node.x,
@@ -318,6 +330,7 @@ export function world3System(world, dt) {
         ...commercialNodes.map((node) => ({ x: node.x, destKind: 'commercial', amount: COMMERCIAL_LABOR_PER_BUILDING, remaining: COMMERCIAL_LABOR_PER_BUILDING, received: 0 })),
         ...civicNodes.map((node) => ({ x: node.x, destKind: 'civic', amount: CIVIC_LABOR_PER_BUILDING, remaining: CIVIC_LABOR_PER_BUILDING, received: 0 })),
         ...logisticsNodes.map((node) => ({ x: node.x, destKind: 'logistics', amount: LOGISTICS_LABOR_PER_BUILDING, remaining: LOGISTICS_LABOR_PER_BUILDING, received: 0 })),
+        ...plumbingNodes.map((node) => ({ x: node.x, destKind: 'plumbing', amount: PLUMBING_LABOR_PER_BUILDING, remaining: PLUMBING_LABOR_PER_BUILDING, received: 0 })),
       ];
       allocateFlows(laborSuppliers, laborConsumers, 'commute', currentTrips, 'weighted');
       const laborByKind = laborConsumers.reduce((map, consumer) => {
@@ -328,11 +341,13 @@ export function world3System(world, dt) {
       const commercialLaborDelivered = laborByKind.commercial || 0;
       const civicLaborDelivered = laborByKind.civic || 0;
       const logisticsLaborDelivered = laborByKind.logistics || 0;
-      const componentLaborDelivered = factoryLaborDelivered + commercialLaborDelivered + civicLaborDelivered + logisticsLaborDelivered;
+      const plumbingLaborDelivered = laborByKind.plumbing || 0;
+      const componentLaborDelivered = factoryLaborDelivered + commercialLaborDelivered + civicLaborDelivered + logisticsLaborDelivered + plumbingLaborDelivered;
       const factoryLaborUtilization = factoryLaborDemand > 0 ? factoryLaborDelivered / factoryLaborDemand : 0;
       const commercialLaborUtilization = commercialLaborDemand > 0 ? commercialLaborDelivered / commercialLaborDemand : 0;
       const civicLaborUtilization = civicLaborDemand > 0 ? civicLaborDelivered / civicLaborDemand : 0;
       const logisticsLaborUtilization = logisticsLaborDemand > 0 ? logisticsLaborDelivered / logisticsLaborDemand : 0;
+      const plumbingLaborUtilization = plumbingLaborDemand > 0 ? plumbingLaborDelivered / plumbingLaborDemand : 0;
       const componentLogisticsEffect = 1 + componentLogistics * LOGISTICS_THROUGHPUT_PER_BUILDING * logisticsLaborUtilization;
 
       const goodsSuppliers = component.factories.map((lot) => ({
@@ -356,6 +371,7 @@ export function world3System(world, dt) {
         ...component.commercials.map((lot) => ({ x: lot.x, destKind: 'commercial', amount: GOODS_INPUT_PER_COMMERCIAL, remaining: GOODS_INPUT_PER_COMMERCIAL, received: 0 })),
         ...component.civics.map((lot) => ({ x: lot.x, destKind: 'civic', amount: GOODS_INPUT_PER_CIVIC, remaining: GOODS_INPUT_PER_CIVIC, received: 0 })),
         ...component.logistics.map((lot) => ({ x: lot.x, destKind: 'logistics', amount: GOODS_INPUT_PER_LOGISTICS, remaining: GOODS_INPUT_PER_LOGISTICS, received: 0 })),
+        ...component.plumbings.map((lot) => ({ x: lot.x, destKind: 'plumbing', amount: 8, remaining: 8, received: 0 })),
       ];
       const componentGoodsDelivered = allocateFlows(goodsSuppliers, goodsConsumers, 'freight', currentTrips);
       const totalComponentGoodsDemand = goodsConsumers.reduce((sum, consumer) => sum + consumer.amount, 0);
@@ -378,6 +394,12 @@ export function world3System(world, dt) {
           remaining: 90 * civicLaborUtilization * civicGoodsScale,
         })),
       ];
+      const plumbingSuppliers = component.plumbings.map((lot) => ({
+        x: lot.x,
+        originKind: 'plumbing',
+        amount: SERVICES_PER_PLUMBING * plumbingLaborUtilization * componentLogisticsEffect * (0.7 + plumbingAccessRatio * 0.3),
+        remaining: SERVICES_PER_PLUMBING * plumbingLaborUtilization * componentLogisticsEffect * (0.7 + plumbingAccessRatio * 0.3),
+      }));
       const serviceConsumers = [
         ...component.houses.map((lot) => ({ x: lot.x, destKind: 'house', amount: SERVICE_DEMAND_PER_HOUSE, remaining: SERVICE_DEMAND_PER_HOUSE, received: 0 })),
         ...component.farms.map((lot) => ({ x: lot.x, destKind: 'farm', amount: SERVICE_DEMAND_PER_FARM, remaining: SERVICE_DEMAND_PER_FARM, received: 0 })),
@@ -385,18 +407,31 @@ export function world3System(world, dt) {
         ...component.commercials.map((lot) => ({ x: lot.x, destKind: 'commercial', amount: SERVICE_DEMAND_PER_COMMERCIAL, remaining: SERVICE_DEMAND_PER_COMMERCIAL, received: 0 })),
         ...component.civics.map((lot) => ({ x: lot.x, destKind: 'civic', amount: SERVICE_DEMAND_PER_CIVIC, remaining: SERVICE_DEMAND_PER_CIVIC, received: 0 })),
         ...component.logistics.map((lot) => ({ x: lot.x, destKind: 'logistics', amount: SERVICE_DEMAND_PER_LOGISTICS, remaining: SERVICE_DEMAND_PER_LOGISTICS, received: 0 })),
+        ...component.plumbings.map((lot) => ({ x: lot.x, destKind: 'plumbing', amount: 10, remaining: 10, received: 0 })),
+      ];
+      const sanitationConsumers = [
+        ...component.houses.map((lot) => ({ x: lot.x, destKind: 'house', amount: 12, remaining: 12, received: 0 })),
+        ...component.farms.map((lot) => ({ x: lot.x, destKind: 'farm', amount: 6, remaining: 6, received: 0 })),
+        ...component.factories.map((lot) => ({ x: lot.x, destKind: 'factory', amount: 8, remaining: 8, received: 0 })),
+        ...component.commercials.map((lot) => ({ x: lot.x, destKind: 'commercial', amount: 6, remaining: 6, received: 0 })),
+        ...component.civics.map((lot) => ({ x: lot.x, destKind: 'civic', amount: 4, remaining: 4, received: 0 })),
+        ...component.logistics.map((lot) => ({ x: lot.x, destKind: 'logistics', amount: 4, remaining: 4, received: 0 })),
       ];
       const componentServicesDelivered = allocateFlows(serviceSuppliers, serviceConsumers, 'service', currentTrips);
-      const extendedServicesDemand = serviceConsumers.reduce((sum, consumer) => sum + consumer.amount, 0);
+      const plumbingServicesDelivered = allocateFlows(plumbingSuppliers, sanitationConsumers, 'service', currentTrips);
+      const extendedServicesDemand = serviceConsumers.reduce((sum, consumer) => sum + consumer.amount, 0)
+        + sanitationConsumers.reduce((sum, consumer) => sum + consumer.amount, 0);
 
       foodDelivered += componentFoodDelivered;
       laborDelivered += componentLaborDelivered;
       goodsDemand += totalComponentGoodsDemand;
       goodsDelivered += componentGoodsDelivered;
       servicesDemand += extendedServicesDemand;
-      servicesDelivered += componentServicesDelivered;
+      servicesDelivered += componentServicesDelivered + plumbingServicesDelivered;
       civicEffect += componentCivics * CIVIC_QOL_PER_BUILDING * civicLaborUtilization * civicGoodsScale;
       logisticsEffect += componentLogistics * LOGISTICS_THROUGHPUT_PER_BUILDING * logisticsLaborUtilization;
+      plumbingEffect += componentPlumbings * PLUMBING_SANITATION_PER_BUILDING * plumbingLaborUtilization
+        + plumbingServicesDelivered / Math.max(1, sanitationConsumers.reduce((sum, consumer) => sum + consumer.amount, 0)) * 0.06;
     }
 
     const foodOutput = foodSupply;
@@ -415,7 +450,7 @@ export function world3System(world, dt) {
     const deathRate = 0.008
       + 0.018 * clamp(1 - foodPerCapita, 0, 1)
       + 0.008 * clamp(1 - servicesFulfillment, 0, 1)
-      + 0.012 * clamp(pollution, 0, 2)
+      + 0.012 * clamp(pollution, 0, 2) * clamp(1.03 - (plumbingEffect - 1) * 0.45, 0.58, 1.03)
       + 0.008 * clamp(housingPressure - 1, 0, 1);
 
     const growthFactor = 1 + (birthRate - deathRate) * dtYears;
@@ -428,7 +463,8 @@ export function world3System(world, dt) {
     const workersNeeded = factories * WORKERS_PER_FACTORY
       + commercials * COMMERCIAL_LABOR_PER_BUILDING
       + civics * CIVIC_LABOR_PER_BUILDING
-      + logistics * LOGISTICS_LABOR_PER_BUILDING;
+      + logistics * LOGISTICS_LABOR_PER_BUILDING
+      + plumbings * PLUMBING_LABOR_PER_BUILDING;
     const factoryUtilization = workersNeeded > 0
       ? clamp(laborDelivered / workersNeeded, 0, 1)
       : 0;
@@ -455,8 +491,8 @@ export function world3System(world, dt) {
     );
 
     const resourceUse = (industrialOutput * 0.01 + nextPopulation * 0.00025) * dtYears;
-    const pollutionInflow = (industrialOutput * 0.018 + nextPopulation * 0.00018 + trafficLoad * 0.004) * dtYears;
-    const pollutionDecay = pollution * 0.015 * dtYears;
+    const pollutionInflow = (industrialOutput * 0.018 + nextPopulation * 0.00018 + trafficLoad * 0.004) * dtYears * clamp(1.03 - (plumbingEffect - 1) * 0.35, 0.68, 1.03);
+    const pollutionDecay = pollution * 0.015 * dtYears * clamp(plumbingEffect, 1, 1.35);
 
     const nextResources = clamp(resources - resourceUse, 0, 1);
     const nextPollution = Math.max(0, pollution + pollutionInflow - pollutionDecay);
@@ -474,6 +510,7 @@ export function world3System(world, dt) {
       + commercials * BUILDING_DEFS.commercial.upkeepAnnual
       + civics * BUILDING_DEFS.civic.upkeepAnnual
       + logistics * BUILDING_DEFS.logistics.upkeepAnnual
+      + plumbings * BUILDING_DEFS.plumbing.upkeepAnnual
       + roads * BUILDING_DEFS.road.upkeepAnnual
       + nextPopulation * 0.55
       + nextPollution * 180
@@ -487,6 +524,7 @@ export function world3System(world, dt) {
       + goodsFulfillment * 0.1
       + servicesFulfillment * 0.12
       + Math.min(0.3, civicEffect - 1)
+      + Math.min(0.18, plumbingEffect - 1)
       + clamp(1 - nextPollution * 0.4, 0, 1) * 0.35
       + clamp(1.1 - Math.max(0, housingPressure - 1), 0, 1.1) * 0.18
       + clamp(roadCoverage, 0, 1) * 0.12
@@ -531,6 +569,7 @@ export function world3System(world, dt) {
       commercials,
       civics,
       logistics,
+      plumbings,
       roads,
       connectedHouses: connected.house,
       connectedFarms: connected.farm,
@@ -538,6 +577,7 @@ export function world3System(world, dt) {
       connectedCommercials: connected.commercial,
       connectedCivics: connected.civic,
       connectedLogistics: connected.logistics,
+      connectedPlumbings: connected.plumbing,
       roadCoverage,
       foodDelivered,
       foodShortfall,
@@ -548,6 +588,7 @@ export function world3System(world, dt) {
       servicesDelivered,
       civicEffect,
       logisticsEffect,
+      plumbingEffect,
       workersAvailable,
       workersUsed,
       factoryUtilization,

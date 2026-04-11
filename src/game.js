@@ -13,6 +13,18 @@ if (!context) {
   throw new Error('Unable to acquire 2D rendering context');
 }
 
+function resizeCanvasToViewport() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const width = Math.max(320, Math.floor(window.innerWidth * dpr));
+  const height = Math.max(320, Math.floor(window.innerHeight * dpr));
+  if (canvas.width === width && canvas.height === height) return;
+  canvas.width = width;
+  canvas.height = height;
+}
+
+resizeCanvasToViewport();
+window.addEventListener('resize', resizeCanvasToViewport, { passive: true });
+
 const controls = createBuildControls(canvas);
 const world = createGameWorld({ canvas, context, hud, controls });
 

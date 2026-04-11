@@ -186,6 +186,9 @@ Deno.test('commercial civic and logistics buildings change services quality and 
         { kind: 'road', x: 704 },
         { kind: 'logistics', x: 768 },
         { kind: 'road', x: 768 },
+        { kind: 'road', x: 832 },
+        { kind: 'plumbing', x: 896 },
+        { kind: 'road', x: 896 },
       );
     }
 
@@ -201,13 +204,16 @@ Deno.test('commercial civic and logistics buildings change services quality and 
   const baseModel = buildWorld(false);
   const advancedModel = buildWorld(true);
 
-  assert(advancedModel.commercials === 1 && advancedModel.civics === 1 && advancedModel.logistics === 1, 'expected advanced building counts');
+  assert(advancedModel.commercials === 1 && advancedModel.civics === 1 && advancedModel.logistics === 1 && advancedModel.plumbings === 1, 'expected advanced building counts');
   assert(advancedModel.servicesDelivered > baseModel.servicesDelivered, 'expected commercial buildings to increase delivered services');
   assert(advancedModel.qualityOfLife > baseModel.qualityOfLife, 'expected civic buildings to improve quality of life');
   assert(advancedModel.logisticsEffect > 1, 'expected logistics building to increase throughput');
+  assert(advancedModel.plumbingEffect > 1, 'expected plumbing building to improve sanitation effect');
   assert(advancedModel.trafficLoad < baseModel.trafficLoad, 'expected logistics building to reduce traffic load pressure');
   assert(advancedModel.currentTrips.some((trip) => trip.originKind === 'civic' && trip.category === 'service'), 'expected civic-origin service trips');
+  assert(advancedModel.currentTrips.some((trip) => trip.originKind === 'plumbing' && trip.category === 'service'), 'expected plumbing-origin service trips');
   assert(advancedModel.currentTrips.some((trip) => trip.originKind === 'factory' && trip.destKind === 'commercial'), 'expected factory-to-commercial goods trips');
+  assert(advancedModel.pollution <= baseModel.pollution, 'expected plumbing building to help control pollution');
 });
 
 Deno.test('world3System keeps full graph history instead of trimming old samples', () => {

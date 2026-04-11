@@ -3,59 +3,61 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>World 4 - ecs-js starter</title>
+    <title>World 4</title>
     <style>
       :root {
         color-scheme: dark;
       }
 
+      html {
+        height: 100%;
+      }
+
       body {
         margin: 0;
         min-height: 100vh;
+        min-height: 100dvh;
         font-family: system-ui, sans-serif;
-        background: #111827;
+        background: #020617;
         color: #f9fafb;
-        display: grid;
-        place-items: center;
+        overflow: hidden;
       }
 
       main {
-        width: min(90vw, 900px);
-      }
-
-      h1 {
-        margin: 0 0 0.5rem;
-        font-size: 1.35rem;
-      }
-
-      p {
-        margin: 0 0 0.75rem;
-        color: #d1d5db;
+        position: fixed;
+        inset: 0;
       }
 
       canvas {
-        width: 100%;
-        aspect-ratio: 16 / 9;
-        border: 1px solid #374151;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
         background: #030712;
         display: block;
         touch-action: none;
       }
 
       #hud {
-        margin-top: 0.5rem;
-        font-size: 0.95rem;
-        color: #9ca3af;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 10;
+        padding: 0.7rem 0.9rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+        background: linear-gradient(180deg, rgba(2, 6, 23, 0), rgba(2, 6, 23, 0.92) 30%, rgba(2, 6, 23, 0.96));
+        font-size: 0.92rem;
+        line-height: 1.35;
+        color: #cbd5e1;
+        pointer-events: none;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
       }
     </style>
   </head>
   <body>
     <main>
-      <h1>World 4 · ecs-js game starter</h1>
-      <p>Side-scrolling builder: spend your starting treasury, zone houses, farms, and factories, and keep the tax base growing.</p>
       <canvas id="game" width="960" height="540" aria-label="Game canvas"></canvas>
-      <div id="hud">Starting…</div>
     </main>
+    <div id="hud">Starting…</div>
     <script type="module" src="./game.js"></script>
   </body>
 </html>

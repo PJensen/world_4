@@ -7,6 +7,7 @@ const styleByKind = {
   commercial: { width: 60, height: 42 },
   civic: { width: 58, height: 54 },
   logistics: { width: 62, height: 34 },
+  plumbing: { width: 58, height: 44 },
   road: { width: 64, height: 18 },
 };
 
@@ -19,6 +20,7 @@ const TRIP_COLOR_BY_ORIGIN = Object.freeze({
   commercial: '#60a5fa',
   civic: '#cbd5e1',
   logistics: '#22c55e',
+  plumbing: '#38bdf8',
 });
 
 function formatMoney(amount) {
@@ -142,8 +144,8 @@ function drawWorld3Overlay(context, canvas, model) {
     `Services: ${formatMoney(model.serviceCostsAnnual)}/yr`,
     `Net: ${formatMoney(model.netRevenueAnnual)}/yr`,
     `Population: ${Math.round(model.population).toLocaleString()}`,
-    `Placed H/F/Fx/C/Cv/L/R: ${model.houses} / ${model.farms} / ${model.factories} / ${model.commercials} / ${model.civics} / ${model.logistics} / ${model.roads}`,
-    `Road access all: ${model.connectedHouses}/${model.connectedFarms}/${model.connectedFactories}/${model.connectedCommercials}/${model.connectedCivics}/${model.connectedLogistics}`,
+    `Placed H/F/Fx/C/Cv/L/P/R: ${model.houses} / ${model.farms} / ${model.factories} / ${model.commercials} / ${model.civics} / ${model.logistics} / ${model.plumbings} / ${model.roads}`,
+    `Road access all: ${model.connectedHouses}/${model.connectedFarms}/${model.connectedFactories}/${model.connectedCommercials}/${model.connectedCivics}/${model.connectedLogistics}/${model.connectedPlumbings}`,
     `Food delivered: ${Math.round(model.foodDelivered)} / ${Math.round(model.foodDemand)}`,
     `Goods delivered: ${Math.round(model.goodsDelivered)} / ${Math.round(model.goodsDemand)}`,
     `Services delivered: ${Math.round(model.servicesDelivered)} / ${Math.round(model.servicesDemand)}`,
@@ -151,6 +153,7 @@ function drawWorld3Overlay(context, canvas, model) {
     `Factory util: ${(model.factoryUtilization * 100).toFixed(0)}%  •  Civic ${(model.civicEffect * 100).toFixed(0)}%`,
     `Traffic C/F/S: ${Math.round(model.commuterTraffic)} / ${Math.round(model.freightTraffic)} / ${Math.round(model.serviceTraffic)}`,
     `Congestion: ${(model.trafficLoad * 100).toFixed(0)}%  •  Logistics ${(model.logisticsEffect * 100).toFixed(0)}%`,
+    `Plumbing: ${(model.plumbingEffect * 100).toFixed(0)}%  •  Pollution: ${model.pollution.toFixed(2)}`,
     `QoL: ${model.qualityOfLife.toFixed(2)}  •  TOD: ${Math.round(model.timeOfDay * 24)}:00`,
   ];
 
@@ -421,12 +424,17 @@ function drawPlacementHud(context, canvas, selectedKind, money, message, overlay
       : 'rgba(15, 23, 42, 0.35)';
     context.fillRect(x + 1, 1, segmentWidth - 2, 54);
 
-    context.fillStyle = isSelected ? '#f8fafc' : '#cbd5e1';
-    context.font = 'bold 13px system-ui, sans-serif';
-    context.fillText(label, x + 10, 21);
-    context.font = '12px system-ui, sans-serif';
-    context.fillStyle = canAfford ? '#93c5fd' : '#fca5a5';
-    context.fillText(priceLabel, x + 10, 40);
+    drawFittedText(context, label, x + 10, 21, segmentWidth - 18, {
+      maxFontSize: 13,
+      minFontSize: 8,
+      fontWeight: 'bold',
+      color: isSelected ? '#f8fafc' : '#cbd5e1',
+    });
+    drawFittedText(context, priceLabel, x + 10, 40, segmentWidth - 18, {
+      maxFontSize: 12,
+      minFontSize: 8,
+      color: canAfford ? '#93c5fd' : '#fca5a5',
+    });
   });
 
   const toggleX = canvas.width - toggleWidth;
@@ -597,10 +605,32 @@ function drawLogistics(context, x, groundY, style) {
   context.fillRect(left + 44, y + 8, 8, 3);
 }
 
+function drawPlumbing(context, x, groundY, style) {
+  const y = groundY - style.height;
+  const left = x + 3;
+
+  context.fillStyle = '#0f766e';
+  context.fillRect(left + 8, y + 16, style.width - 16, style.height - 16);
+  context.fillStyle = '#38bdf8';
+  context.fillRect(left + 4, y + 10, 12, 10);
+  context.fillRect(left + style.width - 16, y + 10, 12, 10);
+  context.fillRect(left + 18, y + 6, style.width - 36, 8);
+  context.fillStyle = '#e0f2fe';
+  context.fillRect(left + 24, y + 24, 10, style.height - 24);
+  context.fillRect(left + style.width - 34, y + 24, 10, style.height - 24);
+  context.beginPath();
+  context.arc(left + style.width * 0.5, y + 28, 6, 0, Math.PI * 2);
+  context.fill();
+}
+
 function drawBuilding(context, kind, x, groundY, worldX = 0) {
   const style = styleByKind[kind] || styleByKind.house;
   if (kind === 'road') {
     drawRoad(context, x, groundY, style);
+    return;
+  }
+  if (kind === 'plumbing') {
+    drawPlumbing(context, x, groundY, style);
     return;
   }
   if (kind === 'logistics') {
@@ -697,14 +727,14 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
 
     let cameraX = 0;
     let tileSize = 64;
-    let groundY = 420;
+    let groundY = Math.max(340, Math.min(canvas.height - 120, Math.round(canvas.height * 0.82)));
     let selectedKind = controls.getSelectedKind();
     let overlayMode = controls.getOverlayMode ? controls.getOverlayMode() : 'overview';
     let model = null;
     for (const [id, camera, mode] of world.query(Camera, BuildMode)) {
       cameraX = camera.x;
       tileSize = mode.tileSize;
-      groundY = mode.groundY;
+      groundY = Math.max(mode.groundY, Math.min(canvas.height - 120, Math.round(canvas.height * 0.82)));
       selectedKind = mode.selectedKind;
       overlayMode = mode.overlayMode;
       break;
@@ -838,7 +868,7 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
         `tab ${overlayMode}`,
         model ? `treasury ${formatMoney(model.money)}` : null,
         model ? `net ${formatMoney(model.netRevenueAnnual)}/yr` : null,
-        model ? `lots ${model.houses}/${model.farms}/${model.factories}/${model.commercials}/${model.civics}/${model.logistics}/${model.roads}` : null,
+        model ? `lots ${model.houses}/${model.farms}/${model.factories}/${model.commercials}/${model.civics}/${model.logistics}/${model.plumbings}/${model.roads}` : null,
         model ? `flows ${Math.round(model.foodDelivered)}/${Math.round(model.goodsDelivered)}/${Math.round(model.servicesDelivered)}` : null,
         model ? `traffic ${Math.round(model.commuterTraffic)}/${Math.round(model.freightTraffic)}/${Math.round(model.serviceTraffic)}` : null,
         `smoke ${smokeStats.activeParticles}/${smokeStats.emitters}`,

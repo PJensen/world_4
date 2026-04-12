@@ -420,9 +420,10 @@ function drawPlacementHud(context, canvas, selectedKind, money, message, overlay
   const toggleWidth = 132;
   const segmentWidth = (canvas.width - toggleWidth) / TOOL_ORDER.length;
 
-  context.fillStyle = 'rgba(2, 6, 23, 0.86)';
+  context.fillStyle = '#020617';
   context.fillRect(0, 0, canvas.width, 56);
   context.strokeStyle = '#334155';
+  context.lineWidth = 1;
   context.beginPath();
   context.moveTo(0, 56);
   context.lineTo(canvas.width, 56);
@@ -494,14 +495,11 @@ function drawPipe(context, x, groundY, style) {
   context.fillRect(x, waterY - 3, style.width, 6);
   context.fillStyle = '#38bdf8';
   context.fillRect(x, waterY - 3, style.width, 2);
-  context.fillStyle = '#0284c7';
-  context.fillRect(x + 2, waterY - 5, 6, 10);
-  context.fillRect(x + style.width - 8, waterY - 5, 6, 10);
   context.fillStyle = '#7dd3fc';
   context.beginPath();
-  context.arc(x + style.width * 0.3, waterY, 1.5, 0, Math.PI * 2);
+  context.arc(x + style.width * 0.25, waterY, 1.5, 0, Math.PI * 2);
   context.arc(x + style.width * 0.5, waterY, 1.5, 0, Math.PI * 2);
-  context.arc(x + style.width * 0.7, waterY, 1.5, 0, Math.PI * 2);
+  context.arc(x + style.width * 0.75, waterY, 1.5, 0, Math.PI * 2);
   context.fill();
 
   const sewerY = groundY + 46;
@@ -511,9 +509,6 @@ function drawPipe(context, x, groundY, style) {
   context.fillRect(x, sewerY + 2, style.width, 2);
   context.fillStyle = '#4d7c0f';
   context.fillRect(x, sewerY - 4, style.width, 2);
-  context.fillStyle = '#3f6212';
-  context.fillRect(x + 1, sewerY - 6, 8, 12);
-  context.fillRect(x + style.width - 9, sewerY - 6, 8, 12);
 }
 
 function drawPowerLine(context, x, groundY, style) {

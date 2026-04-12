@@ -145,7 +145,7 @@ export function createBuildControls(canvas, target = window) {
     const totalDy = Math.abs(pos.y - state.pointerStartY);
     if (totalDx > 8 || totalDy > 8) state.pointerMoved = true;
 
-    if (state.pointerType === 'touch' || state.pointerType === 'pen') {
+    if (state.pointerMoved) {
       state.panDelta -= dx / VIEW_ZOOM;
     }
     state.pointerLastX = pos.x;
@@ -209,6 +209,10 @@ export function createBuildControls(canvas, target = window) {
       const maxScroll = Math.max(0, totalWidth - toolAreaWidth);
       const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
       state.toolbarScrollX = clamp(state.toolbarScrollX + delta, 0, maxScroll);
+      event.preventDefault();
+    } else {
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      state.panDelta += delta / VIEW_ZOOM;
       event.preventDefault();
     }
   }, { passive: false });

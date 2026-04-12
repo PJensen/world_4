@@ -956,6 +956,8 @@ function collectVisibleLots(world, cameraX, canvasWidth) {
 }
 
 export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
+  let prevCameraX = 0;
+
   return function renderSystem(world, dt = 1 / 60) {
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = '#0f172a';
@@ -976,6 +978,15 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
 
     const modelTuple = world.query(World3State)[Symbol.iterator]().next().value;
     model = modelTuple ? modelTuple[1] : null;
+
+    const cameraDeltaX = cameraX - prevCameraX;
+    prevCameraX = cameraX;
+    if (cameraDeltaX !== 0) {
+      const pool = smokeFx.pool;
+      for (let i = 0; i < pool.count; i += 1) {
+        pool.x[i] -= cameraDeltaX;
+      }
+    }
 
     const vw = canvas.width / VIEW_ZOOM;
     const vh = canvas.height / VIEW_ZOOM;

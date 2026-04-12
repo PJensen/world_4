@@ -71,7 +71,9 @@ export const BUILDING_DEFS = Object.freeze({
 
 export const UNDERLAY_KINDS = Object.freeze(['road', 'pipe', 'powerline']);
 
-export const VIEW_ZOOM = 1.5;
+export const VIEW_ZOOM = 1.3;
+
+export const TOOL_SEGMENT_WIDTH = 140;
 
 export const Camera = defineComponent('Camera', {
 	x: 0,
@@ -149,7 +151,7 @@ export const World3State = defineComponent('World3State', {
 	serviceTraffic: 0,
 	trafficLoad: 0,
 	currentTrips: [],
-	money: 10000,
+	money: 100000,
 	taxRevenueAnnual: 0,
 	serviceCostsAnnual: 0,
 	netRevenueAnnual: 0,

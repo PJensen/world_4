@@ -1,4 +1,4 @@
-import { BUILDING_DEFS, BuildMode, Building, Camera, UNDERLAY_KINDS, VIEW_ZOOM, World3State } from '../components.js';
+import { BUILDING_DEFS, BuildMode, Building, Camera, TOOL_SEGMENT_WIDTH, UNDERLAY_KINDS, VIEW_ZOOM, World3State } from '../components.js';
 
 const styleByKind = {
   house: { width: 52, height: 38 },
@@ -416,24 +416,28 @@ function drawStatsOverlay(context, canvas, model) {
   }
 }
 
-function drawPlacementHud(context, canvas, selectedKind, money, message, overlayMode) {
+function drawPlacementHud(context, canvas, selectedKind, money, message, overlayMode, toolbarScrollX) {
   const toggleWidth = 132;
-  const segmentWidth = (canvas.width - toggleWidth) / TOOL_ORDER.length;
+  const segmentWidth = TOOL_SEGMENT_WIDTH;
+  const toolAreaWidth = canvas.width - toggleWidth;
+  const totalToolsWidth = TOOL_ORDER.length * segmentWidth;
+  const maxScroll = Math.max(0, totalToolsWidth - toolAreaWidth);
+  const scrollX = Math.max(0, Math.min(maxScroll, toolbarScrollX || 0));
 
   context.fillStyle = '#020617';
   context.fillRect(0, 0, canvas.width, 56);
-  context.strokeStyle = '#334155';
-  context.lineWidth = 1;
+
+  context.save();
   context.beginPath();
-  context.moveTo(0, 56);
-  context.lineTo(canvas.width, 56);
-  context.stroke();
+  context.rect(0, 0, toolAreaWidth, 56);
+  context.clip();
 
   TOOL_ORDER.forEach((kind, index) => {
     const rule = BUILDING_DEFS[kind];
     const canAfford = kind === 'bulldoze' || (rule ? money >= rule.cost : true);
     const isSelected = kind === selectedKind;
-    const x = index * segmentWidth;
+    const x = index * segmentWidth - scrollX;
+    if (x + segmentWidth < 0 || x > toolAreaWidth) return;
     const label = kind === 'bulldoze' ? 'Bulldoze' : rule.label;
     const priceLabel = kind === 'bulldoze' ? 'refund' : formatMoney(rule.cost);
 
@@ -442,20 +446,49 @@ function drawPlacementHud(context, canvas, selectedKind, money, message, overlay
       : 'rgba(15, 23, 42, 0.35)';
     context.fillRect(x + 1, 1, segmentWidth - 2, 54);
 
-    drawFittedText(context, label, x + 10, 21, segmentWidth - 18, {
-      maxFontSize: 13,
-      minFontSize: 8,
+    drawFittedText(context, label, x + 12, 22, segmentWidth - 22, {
+      maxFontSize: 15,
+      minFontSize: 10,
       fontWeight: 'bold',
       color: isSelected ? '#f8fafc' : '#cbd5e1',
     });
-    drawFittedText(context, priceLabel, x + 10, 40, segmentWidth - 18, {
-      maxFontSize: 12,
-      minFontSize: 8,
+    drawFittedText(context, priceLabel, x + 12, 42, segmentWidth - 22, {
+      maxFontSize: 14,
+      minFontSize: 10,
       color: canAfford ? '#93c5fd' : '#fca5a5',
     });
   });
 
+  context.restore();
+
+  if (scrollX > 0) {
+    const fadeL = context.createLinearGradient(0, 0, 36, 0);
+    fadeL.addColorStop(0, '#020617');
+    fadeL.addColorStop(1, 'rgba(2, 6, 23, 0)');
+    context.fillStyle = fadeL;
+    context.fillRect(0, 0, 36, 56);
+    context.fillStyle = '#94a3b8';
+    context.font = '18px system-ui, sans-serif';
+    context.textAlign = 'center';
+    context.fillText('\u25C0', 14, 34);
+    context.textAlign = 'left';
+  }
+  if (scrollX < maxScroll) {
+    const fadeR = context.createLinearGradient(toolAreaWidth - 36, 0, toolAreaWidth, 0);
+    fadeR.addColorStop(0, 'rgba(2, 6, 23, 0)');
+    fadeR.addColorStop(1, '#020617');
+    context.fillStyle = fadeR;
+    context.fillRect(toolAreaWidth - 36, 0, 36, 56);
+    context.fillStyle = '#94a3b8';
+    context.font = '18px system-ui, sans-serif';
+    context.textAlign = 'center';
+    context.fillText('\u25B6', toolAreaWidth - 14, 34);
+    context.textAlign = 'left';
+  }
+
   const toggleX = canvas.width - toggleWidth;
+  context.fillStyle = '#020617';
+  context.fillRect(toggleX, 0, toggleWidth, 56);
   const statsActive = overlayMode === 'stats';
   context.fillStyle = statsActive ? 'rgba(30, 41, 59, 0.9)' : 'rgba(14, 116, 144, 0.72)';
   context.fillRect(toggleX + 1, 1, toggleWidth - 2, 54);
@@ -465,6 +498,13 @@ function drawPlacementHud(context, canvas, selectedKind, money, message, overlay
   context.font = '12px system-ui, sans-serif';
   context.fillStyle = '#cbd5e1';
   context.fillText(statsActive ? 'show metrics' : 'show flows', toggleX + 18, 41);
+
+  context.strokeStyle = '#334155';
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(0, 56);
+  context.lineTo(canvas.width, 56);
+  context.stroke();
 
   context.fillStyle = '#e2e8f0';
   context.font = '13px system-ui, sans-serif';
@@ -1115,6 +1155,7 @@ export function createRenderSystem(canvas, context, hud, controls, smokeFx) {
       model ? model.money : 0,
       model ? model.lastActionText : 'Build carefully.',
       overlayMode,
+      controls.getToolbarScrollX ? controls.getToolbarScrollX() : 0,
     );
 
     if (model) {

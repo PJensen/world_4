@@ -1,4 +1,4 @@
-import { BUILDING_DEFS, VIEW_ZOOM } from './components.js';
+import { BUILDING_DEFS, TOOL_SEGMENT_WIDTH, VIEW_ZOOM } from './components.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -33,6 +33,11 @@ export function createBuildControls(canvas, target = window) {
     pointerMoved: false,
     pointerType: 'mouse',
     panDelta: 0,
+    toolbarScrollX: 0,
+    toolbarDragging: false,
+    toolbarDragStartX: 0,
+    toolbarScrollStart: 0,
+    toolbarDragMoved: false,
   };
 
   const onKeyDown = (event) => {
@@ -81,17 +86,22 @@ export function createBuildControls(canvas, target = window) {
     const pos = eventToCanvasPosition(event, canvas);
 
     if (pos.y <= 56) {
-      const toolKinds = [...BUILD_TOOL_KINDS, 'bulldoze'];
       const toggleWidth = 132;
-      const toolAreaWidth = canvas.width - toggleWidth;
-      if (pos.x < toolAreaWidth) {
-        const segmentWidth = toolAreaWidth / toolKinds.length;
-        const toolIndex = Math.max(0, Math.min(toolKinds.length - 1, Math.floor(pos.x / segmentWidth)));
-        state.selectedKind = toolKinds[toolIndex];
-      } else {
+      if (pos.x >= canvas.width - toggleWidth) {
         state.overlayMode = state.overlayMode === 'overview' ? 'stats' : 'overview';
+        state.pointerX = pos.x;
+        return;
       }
+      state.toolbarDragging = true;
+      state.toolbarDragStartX = pos.x;
+      state.toolbarScrollStart = state.toolbarScrollX;
+      state.toolbarDragMoved = false;
+      state.pointerId = event.pointerId;
       state.pointerX = pos.x;
+      if (typeof canvas.setPointerCapture === 'function' && event.pointerId != null) {
+        try { canvas.setPointerCapture(event.pointerId); } catch (_) { }
+      }
+      event.preventDefault();
       return;
     }
 
@@ -112,6 +122,22 @@ export function createBuildControls(canvas, target = window) {
   const onPointerMove = (event) => {
     const pos = eventToCanvasPosition(event, canvas);
     state.pointerX = pos.x;
+
+    if (state.toolbarDragging && event.pointerId === state.pointerId) {
+      const tdx = pos.x - state.toolbarDragStartX;
+      if (Math.abs(tdx) > 5) state.toolbarDragMoved = true;
+      if (state.toolbarDragMoved) {
+        const toggleWidth = 132;
+        const toolAreaWidth = canvas.width - toggleWidth;
+        const toolKinds = [...BUILD_TOOL_KINDS, 'bulldoze'];
+        const totalWidth = toolKinds.length * TOOL_SEGMENT_WIDTH;
+        const maxScroll = Math.max(0, totalWidth - toolAreaWidth);
+        state.toolbarScrollX = clamp(state.toolbarScrollStart - tdx, 0, maxScroll);
+      }
+      event.preventDefault();
+      return;
+    }
+
     if (state.pointerId == null || event.pointerId !== state.pointerId) return;
 
     const dx = pos.x - state.pointerLastX;
@@ -129,6 +155,28 @@ export function createBuildControls(canvas, target = window) {
   const onPointerUp = (event) => {
     const pos = eventToCanvasPosition(event, canvas);
     state.pointerX = pos.x;
+
+    if (state.toolbarDragging && event.pointerId === state.pointerId) {
+      state.toolbarDragging = false;
+      if (!state.toolbarDragMoved) {
+        const toggleWidth = 132;
+        const toolAreaWidth = canvas.width - toggleWidth;
+        if (pos.x < toolAreaWidth) {
+          const toolKinds = [...BUILD_TOOL_KINDS, 'bulldoze'];
+          const toolIndex = Math.floor((pos.x + state.toolbarScrollX) / TOOL_SEGMENT_WIDTH);
+          if (toolIndex >= 0 && toolIndex < toolKinds.length) {
+            state.selectedKind = toolKinds[toolIndex];
+          }
+        }
+      }
+      if (typeof canvas.releasePointerCapture === 'function' && state.pointerId != null) {
+        try { canvas.releasePointerCapture(state.pointerId); } catch (_) { }
+      }
+      state.pointerId = null;
+      event.preventDefault();
+      return;
+    }
+
     if (state.pointerId == null || event.pointerId !== state.pointerId) return;
 
     if (!state.pointerMoved && pos.y > 54) {
@@ -151,12 +199,27 @@ export function createBuildControls(canvas, target = window) {
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointercancel', onPointerUp);
 
+  canvas.addEventListener('wheel', (event) => {
+    const pos = eventToCanvasPosition(event, canvas);
+    if (pos.y <= 56) {
+      const toggleWidth = 132;
+      const toolAreaWidth = canvas.width - toggleWidth;
+      const toolKinds = [...BUILD_TOOL_KINDS, 'bulldoze'];
+      const totalWidth = toolKinds.length * TOOL_SEGMENT_WIDTH;
+      const maxScroll = Math.max(0, totalWidth - toolAreaWidth);
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      state.toolbarScrollX = clamp(state.toolbarScrollX + delta, 0, maxScroll);
+      event.preventDefault();
+    }
+  }, { passive: false });
+
   return {
     isMovingLeft: () => state.moveLeft,
     isMovingRight: () => state.moveRight,
     getSelectedKind: () => state.selectedKind,
     getOverlayMode: () => state.overlayMode,
     getPointerX: () => state.pointerX,
+    getToolbarScrollX: () => state.toolbarScrollX,
     consumePanDelta: () => {
       const delta = state.panDelta;
       state.panDelta = 0;
